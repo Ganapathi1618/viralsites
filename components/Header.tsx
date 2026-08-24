@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import LiveVisitors from './LiveVisitors'
 import ViewCounter from './ViewCounter'
 import { formatMoney } from '@/lib/format'
 import type { Stats } from '@/lib/types'
@@ -34,6 +35,7 @@ export default function Header({
               <ViewCounter initial={views} />
             </span>{' '}
             views
+            <LiveVisitors />
           </span>
         </div>
 

@@ -336,6 +336,22 @@ It counts raw page loads, bots included, so it will read higher than Umami's
 visitor figure. That is the usual trade for a public counter — it is social
 proof, not analytics.
 
+**The "N live" badge** counts current visitors from `active_visitors`. Each tab
+generates a session id once, keeps it in `sessionStorage`, and posts a
+heartbeat every 30 seconds; `touch_visitor()` records it, deletes anyone quiet
+for five minutes, and returns the remaining count — one round trip, and the
+sweep rides along with the writes rather than needing a cron.
+
+The badge hides below two, because "1 live" tells every visitor they are alone
+on the page. Session ids are validated against `^[A-Za-z0-9_-]{8,64}$` before
+being stored, and `active_visitors` carries no RLS policies at all: it is
+reachable only through the security-definer functions, so ids never leave the
+server.
+
+A determined visitor could still post several distinct ids and inflate the
+figure. Nothing here is load-bearing enough to warrant an IP-derived id, but
+that is the fix if it ever matters.
+
 ## Design
 
 White (`#ffffff`), `#f5f5f5` fills, `#ebebeb` borders, `#0066ff` for actions and

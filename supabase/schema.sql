@@ -87,6 +87,17 @@ create table if not exists public.page_views (
   total_views bigint not null default 0
 );
 
+-- ------------------------------------------------------ active_visitors ----
+-- One row per browser session, swept clean five minutes after its last
+-- heartbeat. Drives the "N live" badge in the header.
+create table if not exists public.active_visitors (
+  id        text primary key,
+  last_seen timestamptz not null default now()
+);
+
+create index if not exists active_visitors_last_seen_idx
+  on public.active_visitors (last_seen desc);
+
 -- ------------------------------------------------------ updated_at bump ----
 create or replace function public.touch_updated_at()
 returns trigger language plpgsql as $$
@@ -107,6 +118,9 @@ alter table public.ad_slots    enable row level security;
 alter table public.submissions enable row level security;
 alter table public.advertise_requests enable row level security;
 alter table public.page_views enable row level security;
+-- active_visitors gets no policies at all: it is reached only through the
+-- security-definer functions below, so session ids never leave the server.
+alter table public.active_visitors enable row level security;
 
 -- The directory and both sidebars are public reads.
 drop policy if exists "sites are public" on public.sites;
