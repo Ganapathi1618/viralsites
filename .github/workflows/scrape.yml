@@ -1,0 +1,27 @@
+# Every-6-hour scrape, for when Vercel Cron cannot run at that frequency
+# (the Hobby plan limits cron to one run per day). Delete this file if
+# vercel.json is doing the job.
+#
+# Repository secrets required:
+#   SITE_URL     https://viralsites.fyi
+#   CRON_SECRET  the same value set in the Vercel project env
+name: scrape
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the scrape endpoint
+        run: |
+          response=$(curl -sS -w '\n%{http_code}' \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.SITE_URL }}/api/cron/scrape")
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+          echo "$body"
+          test "$status" = "200"
