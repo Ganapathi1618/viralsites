@@ -80,6 +80,13 @@ create table if not exists public.advertise_requests (
 create index if not exists advertise_requests_created_at_idx
   on public.advertise_requests (created_at desc);
 
+-- ----------------------------------------------------------- page_views ----
+-- One row, one number: the site-wide pageview total shown in the header.
+create table if not exists public.page_views (
+  id          text primary key default 'main',
+  total_views bigint not null default 0
+);
+
 -- ------------------------------------------------------ updated_at bump ----
 create or replace function public.touch_updated_at()
 returns trigger language plpgsql as $$
@@ -99,6 +106,7 @@ alter table public.sites       enable row level security;
 alter table public.ad_slots    enable row level security;
 alter table public.submissions enable row level security;
 alter table public.advertise_requests enable row level security;
+alter table public.page_views enable row level security;
 
 -- The directory and both sidebars are public reads.
 drop policy if exists "sites are public" on public.sites;

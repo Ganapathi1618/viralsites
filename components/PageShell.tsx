@@ -19,11 +19,13 @@ import type { AdSlot, Stats } from '@/lib/types'
  */
 export default function PageShell({
   stats,
+  views,
   leftSlots,
   rightSlots,
   children,
 }: {
   stats: Stats
+  views: number
   leftSlots: AdSlot[]
   rightSlots: AdSlot[]
   children: React.ReactNode
@@ -52,7 +54,7 @@ export default function PageShell({
     <div style={{ '--banner-h': bannerHeight } as React.CSSProperties}>
       <Ticker sitesTracked={stats.sitesTracked} onDismiss={hideBanner} />
 
-      <Header stats={stats} onSubmit={() => setSubmitOpen(true)} />
+      <Header stats={stats} views={views} onSubmit={() => setSubmitOpen(true)} />
 
       {checkoutState ? (
         <div

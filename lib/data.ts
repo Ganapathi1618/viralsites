@@ -109,6 +109,25 @@ export async function getDirectoryData(): Promise<DirectoryData> {
   }
 }
 
+/** Current pageview total for the header. Never throws; 0 on any failure. */
+export async function getPageViews(): Promise<number> {
+  const supabase = getSupabase()
+  if (!supabase) return 0
+
+  const { data, error } = await supabase
+    .from('page_views')
+    .select('total_views')
+    .eq('id', 'main')
+    .maybeSingle()
+
+  if (error) {
+    console.error('[data] page_views:', error.message)
+    return 0
+  }
+
+  return Number(data?.total_views ?? 0)
+}
+
 /** One page of the table, used by /api/sites for "Load more". */
 export async function getSitesPage(offset: number, limit = PAGE_SIZE) {
   const supabase = getSupabase()

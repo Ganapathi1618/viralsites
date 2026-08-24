@@ -160,9 +160,38 @@ database read would otherwise scroll "0 viral sites tracked" across the page.
 Set `NEXT_PUBLIC_DODO_CHECKOUT_URL` when the Dodo product is recreated; it
 falls back to the current link.
 
-**Dodo has no webhook wired up here**, so a completed payment does not fill a
-slot on its own. After a payment lands, match it to its `advertise_requests`
-row and fill the slot by hand:
+### The webhook
+
+`/api/webhooks/dodo` fills a slot automatically. On `payment.succeeded` or
+`subscription.active` it takes the most recent `pending` advertise_request,
+puts it in the lowest-numbered free slot, marks it active, and sets the request
+to `paid`.
+
+Set `DODO_WEBHOOK_SECRET` and point Dodo at
+`https://your-site/api/webhooks/dodo`. **Without the secret the route returns
+503 and fills nothing** — it will not accept an unverified payment event.
+
+Signatures follow the Standard Webhooks spec: the signed content is
+`id.timestamp.body`, HMAC-SHA256, base64. The raw body is read before anything
+parses it, since the signature covers those exact bytes. Requests older than
+five minutes are rejected as replays, and several space-separated signatures
+are accepted so a secret rotation does not drop events.
+`npm run test:webhook` covers every rejection path — wrong secret, tampered
+body, swapped id, stale timestamp, missing headers.
+
+**Pairing is a heuristic.** Dodo's hosted checkout carries no reference back to
+the row written before redirecting, so there is nothing to join on and "most
+recent pending" is the best available match. It is correct when buyers arrive
+one at a time and can mismatch if two people check out in the same moment — the
+email on each request is what to reconcile against.
+
+Two things the webhook does not do: it never refunds or queues a payment that
+arrives when every slot is full (it logs and returns `filled: false`), and it
+sets no expiry, so a $5 five-day slot stays live until it is cleared by hand.
+
+### Filling a slot manually
+
+If you take a payment outside the webhook:
 
 ```sql
 update public.ad_slots
@@ -287,16 +316,25 @@ workflow.
 | `CRON_SECRET` | yes in prod | Guards `/api/cron/scrape` |
 | `SCRAPER_SOURCE_URLS` | no | Comma-separated; defaults to outbid.lol,outbid.fyi |
 
-## Analytics
+## Analytics and the view counter
 
-[Vercel Analytics](https://vercel.com/docs/analytics). `<Analytics />` in
-`app/layout.tsx` is the whole integration — no env vars, no API key, and no
-script tag to maintain. Numbers appear in the project's Analytics tab once it
-is enabled there.
+Two separate things.
 
-It reports page views and visitors to the Vercel dashboard only; there is no
-endpoint the site can read its own figures back from, so the header carries the
-directory's own counter (sites tracked, total earned) and nothing else.
+**Umami** is the analytics tool. The script is in `<head>` in `app/layout.tsx`,
+with the website id falling back to the production value in `lib/analytics.ts`
+so tracking survives a missing env var. It reports to the Umami dashboard and
+nothing on the site reads from it.
+
+**The header's view count** is the site's own, kept in `page_views` in Supabase.
+`ViewCounter` posts to `/api/pageview` on mount and shows the total the reply
+returns, so the number includes the visit that is looking at it. The increment
+runs inside Postgres via `increment_page_views()` rather than a read-then-write
+from the app, so two visitors landing in the same instant cannot both write
+back the same +1.
+
+It counts raw page loads, bots included, so it will read higher than Umami's
+visitor figure. That is the usual trade for a public counter — it is social
+proof, not analytics.
 
 ## Design
 
