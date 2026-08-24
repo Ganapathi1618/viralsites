@@ -258,67 +258,20 @@ workflow.
 | `STRIPE_WEBHOOK_SECRET` | for payments | Webhook signature verification |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | no | Only if you replace hosted Checkout with Stripe.js |
 | `NEXT_PUBLIC_DODO_CHECKOUT_URL` | no | Hosted Dodo checkout; falls back to the current link |
-| `NEXT_PUBLIC_UMAMI_WEBSITE_ID` | no | Loads the Umami script when set |
-| `NEXT_PUBLIC_UMAMI_SRC` | no | Script URL; defaults to Umami Cloud |
-| `UMAMI_API_URL` | no | API base; defaults to Umami Cloud |
-| `UMAMI_API_KEY` | no | Server-only, powers the online badge |
 | `NEXT_PUBLIC_SITE_URL` | recommended | Absolute URLs for redirects and metadata |
 | `CRON_SECRET` | yes in prod | Guards `/api/cron/scrape` |
 | `SCRAPER_SOURCE_URLS` | no | Comma-separated; defaults to outbid.lol,outbid.fyi |
 
-## Analytics and the live counter
+## Analytics
 
-The tracking script is in `<head>` in `app/layout.tsx`. The website id comes
-from `NEXT_PUBLIC_UMAMI_WEBSITE_ID` and falls back to the production id in that
-file, so tracking works even if the env var is missing from a deployment. A
-Umami website id is public by design — it ships in the page source of every
-site that uses one.
+[Vercel Analytics](https://vercel.com/docs/analytics). `<Analytics />` in
+`app/layout.tsx` is the whole integration — no env vars, no API key, and no
+script tag to maintain. Numbers appear in the project's Analytics tab once it
+is enabled there.
 
-Note that this means local and preview builds report into the same Umami site
-unless you set `NEXT_PUBLIC_UMAMI_WEBSITE_ID` to something else there.
-
-The header's "● X online now" badge reads Umami's realtime API through
-`/api/online`, so `UMAMI_API_KEY` stays on the server — that endpoint is not
-CORS-open to browsers and the key must never ship to one. The badge renders
-nothing at all until a number arrives, so a missing or failing Umami setup
-leaves no empty chrome behind.
-
-Umami has returned the active-visitor figure in several shapes across versions,
-so the response is parsed leniently (`5`, `{x:5}`, `[{x:5}]`, `{visitors:5}`)
-and anything unrecognised becomes `null`. **This has not been verified against a
-live Umami account** — the sandbox this was built in cannot reach it. If the
-badge stays hidden with a key set, `curl /api/online` and check the `reason`.
-
-Self-hosting: point `NEXT_PUBLIC_UMAMI_SRC` and `UMAMI_API_URL` at your
-instance.
-
-## Brand assets
-
-The mark is a white "V" on `#0066ff`, rendered from `scripts/brand/` rather than
-hand-drawn, so regenerating at another size is a one-liner.
-
-| File | Purpose |
-| --- | --- |
-| `app/icon.png` | 256px PNG, linked automatically by Next |
-| `app/apple-icon.png` | 180px, iOS home screen |
-| `public/favicon.ico` | 16/32/48 in one container, for `/favicon.ico` hits |
-| `public/favicon.png` | 512px PNG |
-| `public/og.png` | 1200×630 share card |
-
-`og:image` must be an absolute URL — X and Slack reject relative ones — so it is
-resolved against `metadataBase`. That falls back to `https://viralsites.fyi`,
-and deliberately ignores a `NEXT_PUBLIC_SITE_URL` pointing at localhost in
-production, since a stale local value would publish a dead image URL on every
-share.
-
-Regenerate after a design change:
-
-```bash
-npm run brand   # renders every PNG, then repacks favicon.ico
-```
-
-Edit `scripts/brand/icon.html` or `scripts/brand/og.html` and re-run; the assets
-are plain CSS, so a colour or wording change is a one-line edit.
+It reports page views and visitors to the Vercel dashboard only; there is no
+endpoint the site can read its own figures back from, so the header carries the
+directory's own counter (sites tracked, total earned) and nothing else.
 
 ## Design
 

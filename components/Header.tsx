@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import AnalyticsBadge from './AnalyticsBadge'
 import { formatMoney } from '@/lib/format'
 import type { Stats } from '@/lib/types'
 
@@ -15,17 +14,13 @@ export default function Header({ stats, onSubmit }: { stats: Stats; onSubmit: ()
           <span className="font-normal text-muted">.fyi</span>
         </Link>
 
-        <div className="hidden items-center gap-2 md:flex">
-          <div className="flex items-center gap-2 rounded-full border border-line bg-subtle px-3 py-1">
-            <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-money" />
-            <span className="num text-[12px] text-body">
-              {stats.sitesTracked} sites live
-              <span className="mx-1.5 text-muted">·</span>
-              <span className="font-semibold text-money">{formatMoney(stats.totalEarned)}</span>{' '}
-              earned
-            </span>
-          </div>
-          <AnalyticsBadge />
+        <div className="hidden items-center gap-2 rounded-full border border-line bg-subtle px-3 py-1 md:flex">
+          <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-money" />
+          <span className="num text-[12px] text-body">
+            {stats.sitesTracked} sites live
+            <span className="mx-1.5 text-muted">·</span>
+            <span className="font-semibold text-money">{formatMoney(stats.totalEarned)}</span> earned
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
