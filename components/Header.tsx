@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import OnlineBadge from './OnlineBadge'
+import AnalyticsBadge from './AnalyticsBadge'
 import { formatMoney } from '@/lib/format'
 import type { Stats } from '@/lib/types'
 
@@ -25,7 +25,7 @@ export default function Header({ stats, onSubmit }: { stats: Stats; onSubmit: ()
               earned
             </span>
           </div>
-          <OnlineBadge />
+          <AnalyticsBadge />
         </div>
 
         <div className="flex items-center gap-2">
