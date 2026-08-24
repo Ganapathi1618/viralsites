@@ -1,5 +1,4 @@
-'use client'
-
+import Link from 'next/link'
 import { hostname } from '@/lib/format'
 import { AD_SLOT_PRICE_USD, type AdSlot } from '@/lib/types'
 import { Favicon } from './ui'
@@ -29,49 +28,40 @@ function FilledSlot({ slot }: { slot: AdSlot }) {
   )
 }
 
-function OpenSlot({ onClick }: { onClick: () => void }) {
+function OpenSlot() {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      href="/advertise"
       className="block w-full rounded-lg border border-dashed border-line p-2.5 text-left transition hover:border-brand/40 hover:bg-brand/[0.03]"
     >
       <p className="num text-[13px] font-bold text-ink">${AD_SLOT_PRICE_USD}/mo</p>
       <p className="mt-0.5 text-[11.5px] font-medium text-brand">Grab this spot</p>
       <p className="mt-0.5 text-[10.5px] text-muted">Monthly · cancel anytime</p>
-    </button>
+    </Link>
   )
 }
 
 export default function SponsorSlots({
   slots,
-  onAdvertise,
   heading = 'Sponsors',
 }: {
   slots: AdSlot[]
-  onAdvertise: (position: number) => void
   heading?: string
 }) {
-  const firstOpen = slots.find((slot) => !slot.is_active)?.position
-
   return (
     <section className="space-y-2.5">
       <div className="flex items-baseline justify-between">
         <span className="label">{heading}</span>
-        <button
-          type="button"
-          onClick={() => onAdvertise(firstOpen ?? slots[0]?.position ?? 1)}
-          className="text-[11px] font-medium text-brand hover:underline"
-        >
+        <Link href="/advertise" className="text-[11px] font-medium text-brand hover:underline">
           Advertise →
-        </button>
+        </Link>
       </div>
 
       {slots.map((slot) =>
         slot.is_active ? (
           <FilledSlot key={slot.id} slot={slot} />
         ) : (
-          <OpenSlot key={slot.id} onClick={() => onAdvertise(slot.position)} />
+          <OpenSlot key={slot.id} />
         ),
       )}
     </section>

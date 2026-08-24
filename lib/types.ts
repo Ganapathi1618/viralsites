@@ -62,4 +62,13 @@ export type Stats = {
 }
 
 export const AD_SLOT_PRICE_USD = 50
+/** Struck-through list price shown beside the launch deal. */
+export const AD_SLOT_LIST_PRICE_USD = 100
+
+/**
+ * Hosted Dodo Payments checkout for a sponsor slot. Overridable per
+ * deployment, since the link changes if the product is recreated.
+ */
+export const DODO_CHECKOUT_URL =
+  process.env.NEXT_PUBLIC_DODO_CHECKOUT_URL || 'https://dodo.pe/lq17vpnfe59'
 export const ONE_LINER_MAX = 60

@@ -38,8 +38,9 @@ around. `npm run test:rotation` pins the behaviour.
 
 Clicking a table row opens a **drawer** from the right with the full
 description, revenue and its source, a model explainer, and a link out.
-Submitting and advertising both happen in **modals**; `/submit` and
-`/advertise` also exist as standalone pages for direct links.
+Submitting happens in a **modal** (and at `/submit` for direct links);
+advertising has its own page at **`/advertise`**, which reuses the same
+three-column frame via `components/PageShell.tsx`.
 
 ## Running locally
 
@@ -75,17 +76,55 @@ cancelled_at`
 `submissions` — `url, name, one_liner, model_type, revenue_amount,
 revenue_source_url, launched_at, submitter_email, status`
 
+`advertise_requests` — `company_name, company_url, one_liner, email, status`
+
 ### RLS
 
 - `sites`: public read.
 - `ad_slots`: public read of **active slots only**, so a cancelled advertiser's
   details are not served to the browser.
-- `submissions`: insert-only for visitors. Nobody can read them back, which
-  keeps submitter emails private. Moderation uses the service role key.
+- `submissions` and `advertise_requests`: insert-only for visitors. Nobody can
+  read them back, which keeps email addresses private. Reads use the service
+  role key.
 - Writes to `sites` and `ad_slots` come from the scraper and the Stripe
   webhook, both of which use the service role key and bypass RLS.
 
+## Advertising, and Dodo Payments
+
+Every "Advertise" link and every open sponsor card goes to **`/advertise`**.
+The page shows the launch deal ($50 for a month, list price $100), takes the
+buyer's site URL, name, one-liner and email, writes an `advertise_requests`
+row, and only then sends the browser to the hosted Dodo checkout in the same
+tab. Saving first means a started checkout is always recorded, even if the
+buyer abandons the payment.
+
+Set `NEXT_PUBLIC_DODO_CHECKOUT_URL` when the Dodo product is recreated; it
+falls back to the current link.
+
+**Dodo has no webhook wired up here**, so a completed payment does not fill a
+slot on its own. After a payment lands, match it to its `advertise_requests`
+row and fill the slot by hand:
+
+```sql
+update public.ad_slots
+set is_active = true,
+    company_name = 'Their name',
+    company_url  = 'https://theirsite.com',
+    one_liner    = 'Their one-liner.',
+    stripe_subscription_id = 'manual',   -- marks the slot as genuinely paid
+    activated_at = now()
+where position = 4;
+```
+
+The `stripe_subscription_id = 'manual'` line matters: a slot renders as a
+sponsor only when it carries one, which is what stops seeded or half-filled
+rows appearing as advertisers nobody is paying for.
+
 ## Stripe
+
+Stripe is still wired up (`/api/checkout` and `/api/stripe/webhook`) but the
+advertise page no longer calls it — sponsor slots go through Dodo. Leave it in
+place if you may switch back, or delete both routes.
 
 1. Create a **recurring $50/month** price.
 2. Set `STRIPE_SECRET_KEY` and `STRIPE_AD_SLOT_PRICE_ID`.
@@ -165,7 +204,8 @@ workflow.
 | `STRIPE_AD_SLOT_PRICE_ID` | for payments | The $50/month recurring price |
 | `STRIPE_WEBHOOK_SECRET` | for payments | Webhook signature verification |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | no | Only if you replace hosted Checkout with Stripe.js |
-| `NEXT_PUBLIC_SITE_URL` | recommended | Absolute URLs for Stripe redirects and metadata |
+| `NEXT_PUBLIC_DODO_CHECKOUT_URL` | no | Hosted Dodo checkout; falls back to the current link |
+| `NEXT_PUBLIC_SITE_URL` | recommended | Absolute URLs for redirects and metadata |
 | `CRON_SECRET` | yes in prod | Guards `/api/cron/scrape` |
 | `SCRAPER_SOURCE_URLS` | no | Comma-separated; defaults to outbid.lol,outbid.fyi |
 

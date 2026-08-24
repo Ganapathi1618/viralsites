@@ -1,4 +1,4 @@
-export default function Footer({ onNavigate }: { onNavigate?: (target: 'advertise' | 'submit') => void }) {
+export default function Footer({ onSubmit }: { onSubmit?: () => void }) {
   const year = new Date().getFullYear()
 
   return (
@@ -13,24 +13,17 @@ export default function Footer({ onNavigate }: { onNavigate?: (target: 'advertis
           <a href="/" className="transition hover:text-ink">
             Directory
           </a>
-          {onNavigate ? (
-            <>
-              <button type="button" onClick={() => onNavigate('advertise')} className="transition hover:text-ink">
-                Advertise
-              </button>
-              <button type="button" onClick={() => onNavigate('submit')} className="transition hover:text-ink">
-                Submit
-              </button>
-            </>
+          <a href="/advertise" className="transition hover:text-ink">
+            Advertise
+          </a>
+          {onSubmit ? (
+            <button type="button" onClick={onSubmit} className="transition hover:text-ink">
+              Submit
+            </button>
           ) : (
-            <>
-              <a href="/advertise" className="transition hover:text-ink">
-                Advertise
-              </a>
-              <a href="/submit" className="transition hover:text-ink">
-                Submit
-              </a>
-            </>
+            <a href="/submit" className="transition hover:text-ink">
+              Submit
+            </a>
           )}
         </nav>
       </div>

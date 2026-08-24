@@ -1,4 +1,5 @@
-import AppShell from '@/components/AppShell'
+import DirectoryView from '@/components/DirectoryView'
+import PageShell from '@/components/PageShell'
 import { getDirectoryData } from '@/lib/data'
 
 // The directory reflects scraper writes and new submissions, so it renders
@@ -6,6 +7,11 @@ import { getDirectoryData } from '@/lib/data'
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-  const data = await getDirectoryData()
-  return <AppShell data={data} />
+  const { sites, leftSlots, rightSlots, stats, isLive } = await getDirectoryData()
+
+  return (
+    <PageShell stats={stats} leftSlots={leftSlots} rightSlots={rightSlots}>
+      <DirectoryView sites={sites} stats={stats} isLive={isLive} />
+    </PageShell>
+  )
 }

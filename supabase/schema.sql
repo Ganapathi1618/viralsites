@@ -62,6 +62,24 @@ create table if not exists public.submissions (
 
 create index if not exists submissions_created_at_idx on public.submissions (created_at desc);
 
+-- --------------------------------------------------- advertise_requests ----
+-- Filled in on /advertise before the buyer is handed to Dodo Payments. The row
+-- is the only record of who started a checkout, since the payment itself
+-- happens off-site.
+create table if not exists public.advertise_requests (
+  id           uuid primary key default gen_random_uuid(),
+  company_name text not null,
+  company_url  text not null,
+  one_liner    text not null,
+  email        text not null,
+  status       text not null default 'pending'
+                 check (status in ('pending','paid','cancelled')),
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists advertise_requests_created_at_idx
+  on public.advertise_requests (created_at desc);
+
 -- ------------------------------------------------------ updated_at bump ----
 create or replace function public.touch_updated_at()
 returns trigger language plpgsql as $$
@@ -80,6 +98,7 @@ create trigger sites_touch_updated_at
 alter table public.sites       enable row level security;
 alter table public.ad_slots    enable row level security;
 alter table public.submissions enable row level security;
+alter table public.advertise_requests enable row level security;
 
 -- The directory and both sidebars are public reads.
 drop policy if exists "sites are public" on public.sites;

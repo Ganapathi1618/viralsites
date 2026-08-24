@@ -1,15 +1,7 @@
-'use client'
-
 import SponsorSlots from './SponsorSlots'
 import type { AdSlot } from '@/lib/types'
 
-/** Left rail: sponsor positions 1-6. */
-export default function LeftSidebar({
-  slots,
-  onAdvertise,
-}: {
-  slots: AdSlot[]
-  onAdvertise: (position: number) => void
-}) {
-  return <SponsorSlots slots={slots} onAdvertise={onAdvertise} />
+/** Left rail: sponsor slots 1-3. */
+export default function LeftSidebar({ slots }: { slots: AdSlot[] }) {
+  return <SponsorSlots slots={slots} />
 }
