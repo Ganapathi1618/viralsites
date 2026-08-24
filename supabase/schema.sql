@@ -29,7 +29,7 @@ create index if not exists sites_created_at_idx on public.sites (created_at desc
 -- ------------------------------------------------------------- ad_slots ----
 create table if not exists public.ad_slots (
   id                     uuid primary key default gen_random_uuid(),
-  position               int not null unique check (position between 1 and 6),
+  position               int not null unique check (position between 1 and 9),
   company_name           text,
   company_url            text,
   one_liner              text,
@@ -53,7 +53,9 @@ create table if not exists public.submissions (
   revenue_source_url text,
   launched_at        date,
   submitter_email    text,
-  status             text not null default 'pending'
+  -- Submissions go live immediately; 'pending' and 'rejected' remain available
+  -- for taking a site back down by hand.
+  status             text not null default 'approved'
                        check (status in ('pending','approved','rejected')),
   created_at         timestamptz not null default now()
 );
@@ -97,6 +99,7 @@ create policy "anyone can submit" on public.submissions for insert with check (t
 -- both of which use the service role key and bypass RLS entirely.
 
 -- ------------------------------------------------------------ ad slots -----
+-- Positions 1-6 fill the left rail, 7-9 the right rail.
 insert into public.ad_slots (position, company_name, company_url, one_liner, is_active, activated_at)
 values
   (1, 'outbid.lol',   'https://outbid.lol',   'Pay more than the person above you.',  true, now()),
@@ -104,7 +107,10 @@ values
   (3, 'theboard.fyi', 'https://theboard.fyi', 'The leaderboard indie hackers watch.', true, now()),
   (4, null, null, null, false, null),
   (5, null, null, null, false, null),
-  (6, null, null, null, false, null)
+  (6, null, null, null, false, null),
+  (7, 'pixelwall.io', 'https://pixelwall.io', 'Ten thousand pixels, resold quarterly.', true, now()),
+  (8, 'rankme.fyi',   'https://rankme.fyi',   'Climb the rank by paying, or shipping.', true, now()),
+  (9, null, null, null, false, null)
 on conflict (position) do nothing;
 
 -- ---------------------------------------------------------------- seed -----

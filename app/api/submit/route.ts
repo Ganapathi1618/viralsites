@@ -77,6 +77,8 @@ export async function POST(request: Request) {
     )
   }
 
+  // Submissions are auto-approved: the row is logged for the record and the
+  // site is published to the directory in the same request.
   const { error } = await supabase.from('submissions').insert({
     url,
     name,
@@ -86,6 +88,7 @@ export async function POST(request: Request) {
     revenue_source_url: sourceUrl,
     launched_at: launchedAt,
     submitter_email: email || null,
+    status: 'approved',
   })
 
   if (error) {
@@ -93,5 +96,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not save that. Try again shortly.' }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true }, { status: 201 })
+  // Publishing needs the service role: `sites` has no public insert policy, by
+  // design — the anon key must never be able to write the directory.
+  const admin = getSupabaseAdmin()
+  if (!admin) {
+    console.warn('[submit] no service role key; saved the submission but could not publish')
+    return NextResponse.json({ ok: true, published: false }, { status: 201 })
+  }
+
+  const { error: publishError } = await admin.from('sites').upsert(
+    {
+      name,
+      url,
+      description: oneLiner,
+      model_type: body.model_type,
+      // A figure typed into a form is an estimate until someone checks the
+      // source, so it is never written as verified.
+      revenue_amount: revenue ?? 0,
+      revenue_verified: false,
+      revenue_source_url: sourceUrl,
+      launched_at: launchedAt,
+      is_featured: false,
+    },
+    // A resubmission of a URL already listed must not overwrite curated copy.
+    { onConflict: 'url', ignoreDuplicates: true },
+  )
+
+  if (publishError) {
+    console.error('[submit] publish failed:', publishError.message)
+    return NextResponse.json({ ok: true, published: false }, { status: 201 })
+  }
+
+  return NextResponse.json({ ok: true, published: true }, { status: 201 })
 }

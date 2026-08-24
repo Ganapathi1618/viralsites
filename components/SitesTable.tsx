@@ -6,13 +6,21 @@ import { Favicon, ModelTag, TrendCell, VerifiedMark } from './ui'
 
 const MEDALS = ['🥇', '🥈', '🥉']
 
+export const PAGE_SIZE = 10
+
 export default function SitesTable({
   sites,
+  visibleCount,
+  onLoadMore,
   onSelect,
 }: {
   sites: Site[]
+  visibleCount: number
+  onLoadMore: () => void
   onSelect: (site: Site) => void
 }) {
+  const shown = sites.slice(0, visibleCount)
+  const hasMore = visibleCount < sites.length
   if (sites.length === 0) {
     return (
       <div className="rounded-lg border border-line px-6 py-14 text-center">
@@ -38,7 +46,7 @@ export default function SitesTable({
           </thead>
 
           <tbody>
-            {sites.map((site, index) => (
+            {shown.map((site, index) => (
               <tr
                 key={site.id}
                 onClick={() => onSelect(site)}
@@ -113,6 +121,17 @@ export default function SitesTable({
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex flex-col items-center gap-2.5 border-t border-line bg-subtle py-4">
+        <p className="num text-[11.5px] text-muted">
+          Showing {shown.length} of {sites.length} {sites.length === 1 ? 'site' : 'sites'}
+        </p>
+        {hasMore ? (
+          <button type="button" onClick={onLoadMore} className="btn-ghost">
+            Load more
+          </button>
+        ) : null}
       </div>
     </div>
   )

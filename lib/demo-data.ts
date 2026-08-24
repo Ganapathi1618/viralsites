@@ -1,4 +1,4 @@
-import type { AdSlot, Site, Submission } from './types'
+import type { AdSlot, Site } from './types'
 
 /**
  * Fallback content, used when Supabase is unconfigured or unreachable. Mirrors
@@ -8,7 +8,6 @@ import type { AdSlot, Site, Submission } from './types'
 
 const day = 86_400_000
 const ago = (n: number) => new Date(Date.now() - n * day).toISOString()
-const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000).toISOString()
 
 type Seed = [string, string, string, Site['model_type'], number, boolean, number, string, boolean]
 
@@ -49,12 +48,7 @@ export const DEMO_AD_SLOTS: AdSlot[] = [
   { id: 'slot-4', position: 4, company_name: null, company_url: null, one_liner: null, is_active: false },
   { id: 'slot-5', position: 5, company_name: null, company_url: null, one_liner: null, is_active: false },
   { id: 'slot-6', position: 6, company_name: null, company_url: null, one_liner: null, is_active: false },
-]
-
-export const DEMO_SUBMISSIONS: Submission[] = [
-  { id: 's1', name: 'outrank.io', url: 'https://outrank.io', model_type: 'leaderboard', created_at: minutesAgo(2) },
-  { id: 's2', name: 'pixelbid.app', url: 'https://pixelbid.app', model_type: 'bid', created_at: minutesAgo(14) },
-  { id: 's3', name: 'rankme.fyi', url: 'https://rankme.fyi', model_type: 'leaderboard', created_at: minutesAgo(48) },
-  { id: 's4', name: 'spotbid.xyz', url: 'https://spotbid.xyz', model_type: 'bid', created_at: minutesAgo(190) },
-  { id: 's5', name: 'outbid.fyi', url: 'https://outbid.fyi', model_type: 'sponsor', created_at: minutesAgo(700) },
+  { id: 'slot-7', position: 7, company_name: 'pixelwall.io', company_url: 'https://pixelwall.io', one_liner: 'Ten thousand pixels, resold quarterly.', is_active: true },
+  { id: 'slot-8', position: 8, company_name: 'rankme.fyi', company_url: 'https://rankme.fyi', one_liner: 'Climb the rank by paying, or shipping.', is_active: true },
+  { id: 'slot-9', position: 9, company_name: null, company_url: null, one_liner: null, is_active: false },
 ]

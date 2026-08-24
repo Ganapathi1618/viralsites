@@ -8,22 +8,30 @@ import LeftSidebar from './LeftSidebar'
 import Modal from './Modal'
 import RightSidebar from './RightSidebar'
 import SiteDrawer from './SiteDrawer'
-import SitesTable from './SitesTable'
+import SitesTable, { PAGE_SIZE } from './SitesTable'
 import StatsBar from './StatsBar'
 import SubmitForm from './SubmitForm'
+import Footer from './Footer'
 import type { DirectoryData } from '@/lib/data'
 import type { Site } from '@/lib/types'
 
 export default function AppShell({ data }: { data: DirectoryData }) {
-  const { sites, adSlots, submissions, stats, week, isLive } = data
+  const { sites, leftSlots, rightSlots, stats, isLive } = data
 
   const [filter, setFilter] = useState<FilterId>('all')
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [drawerSite, setDrawerSite] = useState<Site | null>(null)
   const [submitOpen, setSubmitOpen] = useState(false)
   const [advertiseOpen, setAdvertiseOpen] = useState(false)
   const [slotPosition, setSlotPosition] = useState<number | undefined>()
 
   const visible = useMemo(() => applyFilter(sites, filter), [sites, filter])
+
+  // A new filter starts the list over at the first page.
+  function changeFilter(next: FilterId) {
+    setFilter(next)
+    setVisibleCount(PAGE_SIZE)
+  }
   const leaders = useMemo(
     () => [...sites].sort((a, b) => b.revenue_amount - a.revenue_amount).slice(0, 5),
     [sites],
@@ -75,7 +83,7 @@ export default function AppShell({ data }: { data: DirectoryData }) {
         <div className="lg:flex lg:h-full lg:gap-6">
           <aside className="hidden shrink-0 py-5 lg:block lg:w-[200px]">
             <div className="scroll-area h-full overflow-y-auto pr-1">
-              <LeftSidebar slots={adSlots} onAdvertise={openAdvertise} />
+              <LeftSidebar slots={leftSlots} onAdvertise={openAdvertise} />
             </div>
           </aside>
 
@@ -92,39 +100,45 @@ export default function AppShell({ data }: { data: DirectoryData }) {
             <StatsBar stats={stats} isLive={isLive} />
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <FilterTabs active={filter} onChange={setFilter} sites={sites} />
+              <FilterTabs active={filter} onChange={changeFilter} sites={sites} />
               <span className="num text-[11.5px] text-muted">
                 {visible.length} {visible.length === 1 ? 'site' : 'sites'}
               </span>
             </div>
 
             <div className="mt-3 pb-8">
-              <SitesTable sites={visible} onSelect={setDrawerSite} />
-
-              <p className="mt-4 text-center text-[11px] text-muted">
-                Revenue is self-reported or scraped from public pages. Verified means someone
-                checked it against a public post — not that it is audited.
-              </p>
+              <SitesTable
+                sites={visible}
+                visibleCount={visibleCount}
+                onLoadMore={() => setVisibleCount((count) => count + PAGE_SIZE)}
+                onSelect={setDrawerSite}
+              />
             </div>
 
             {/* The sidebars are desktop-fixed; below lg they stack here. */}
             <div className="grid gap-6 border-t border-line pt-6 sm:grid-cols-2 lg:hidden">
-              <LeftSidebar slots={adSlots} onAdvertise={openAdvertise} />
+              <LeftSidebar slots={leftSlots} onAdvertise={openAdvertise} />
               <RightSidebar
                 topEarners={leaders}
-                submissions={submissions}
-                week={week}
+                slots={rightSlots}
+                onAdvertise={openAdvertise}
                 onSubmit={() => setSubmitOpen(true)}
               />
             </div>
+
+            <Footer
+              onNavigate={(target) =>
+                target === 'submit' ? setSubmitOpen(true) : openAdvertise()
+              }
+            />
           </main>
 
           <aside className="hidden shrink-0 py-5 lg:block lg:w-[200px]">
             <div className="scroll-area h-full overflow-y-auto pl-1">
               <RightSidebar
                 topEarners={leaders}
-                submissions={submissions}
-                week={week}
+                slots={rightSlots}
+                onAdvertise={openAdvertise}
                 onSubmit={() => setSubmitOpen(true)}
               />
             </div>
@@ -138,7 +152,7 @@ export default function AppShell({ data }: { data: DirectoryData }) {
         open={submitOpen}
         onClose={() => setSubmitOpen(false)}
         title="List your site"
-        subtitle="Free. Reviewed within 24 hours."
+        subtitle="Free. Live in the directory straight away."
       >
         <SubmitForm onDone={() => setSubmitOpen(false)} />
       </Modal>
@@ -149,7 +163,7 @@ export default function AppShell({ data }: { data: DirectoryData }) {
         title="Get in front of indie hackers"
         subtitle="A fixed sidebar slot on every page view."
       >
-        <AdvertiseForm slots={adSlots} position={slotPosition} />
+        <AdvertiseForm slots={[...leftSlots, ...rightSlots]} position={slotPosition} />
       </Modal>
     </>
   )

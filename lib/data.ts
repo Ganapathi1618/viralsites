@@ -1,6 +1,6 @@
 import { getSupabase } from './supabase/client'
-import { DEMO_AD_SLOTS, DEMO_SITES, DEMO_SUBMISSIONS } from './demo-data'
-import type { AdSlot, Site, Stats, Submission, WeekStats } from './types'
+import { DEMO_AD_SLOTS, DEMO_SITES } from './demo-data'
+import type { AdSlot, Site, Stats } from './types'
 
 /**
  * Reads for the directory. Every one degrades to the bundled demo data if
@@ -8,17 +8,20 @@ import type { AdSlot, Site, Stats, Submission, WeekStats } from './types'
  * up as a "demo data" badge rather than a 500.
  */
 
-const WEEK_MS = 7 * 86_400_000
+/** Positions 1-6 render in the left rail, 7-9 in the right. */
+export const AD_SLOT_COUNT = 9
+const LEFT_RAIL_SLOTS = 6
 
 const SITE_COLUMNS =
   'id,name,url,description,model_type,revenue_amount,revenue_verified,revenue_source_url,trend_percent,launched_at,is_featured,created_at'
 
 export type DirectoryData = {
   sites: Site[]
-  adSlots: AdSlot[]
-  submissions: Submission[]
+  /** Left rail, positions 1-6. */
+  leftSlots: AdSlot[]
+  /** Right rail, positions 7-9. */
+  rightSlots: AdSlot[]
   stats: Stats
-  week: WeekStats
   isLive: boolean
 }
 
@@ -26,13 +29,12 @@ export async function getDirectoryData(): Promise<DirectoryData> {
   const supabase = getSupabase()
 
   if (!supabase) {
-    return build(DEMO_SITES, DEMO_AD_SLOTS, DEMO_SUBMISSIONS, false)
+    return build(DEMO_SITES, DEMO_AD_SLOTS, false)
   }
 
-  const [sitesResult, slotsResult, submissionsResult] = await Promise.all([
+  const [sitesResult, slotsResult] = await Promise.all([
     supabase.from('sites').select(SITE_COLUMNS).order('revenue_amount', { ascending: false }).limit(250),
     supabase.from('ad_slots').select('id,position,company_name,company_url,one_liner,is_active').order('position'),
-    supabase.from('submissions').select('id,name,url,model_type,created_at').order('created_at', { ascending: false }).limit(5),
   ])
 
   if (sitesResult.error) console.error('[data] sites:', sitesResult.error.message)
@@ -41,38 +43,28 @@ export async function getDirectoryData(): Promise<DirectoryData> {
   const rows = sitesResult.data ?? []
   if (rows.length === 0) {
     // An empty table means the schema has not been seeded yet.
-    return build(DEMO_SITES, DEMO_AD_SLOTS, DEMO_SUBMISSIONS, false)
+    return build(DEMO_SITES, DEMO_AD_SLOTS, false)
   }
 
   const sites = rows.map(normalizeSite)
   const adSlots = fillSlots((slotsResult.data ?? []) as Partial<AdSlot>[])
 
-  // Submissions are insert-only for the anon key, so this usually comes back
-  // empty in the browser's stead; fall back to the newest sites.
-  const submissions: Submission[] =
-    submissionsResult.data && submissionsResult.data.length > 0
-      ? (submissionsResult.data as Submission[])
-      : [...sites]
-          .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
-          .slice(0, 5)
-          .map((site) => ({
-            id: site.id,
-            name: site.name,
-            url: site.url,
-            model_type: site.model_type,
-            created_at: site.created_at,
-          }))
-
-  return build(sites, adSlots, submissions, true)
+  return build(sites, adSlots, true)
 }
 
-function build(sites: Site[], adSlots: AdSlot[], submissions: Submission[], isLive: boolean): DirectoryData {
-  return { sites, adSlots, submissions, stats: computeStats(sites), week: computeWeek(sites), isLive }
+function build(sites: Site[], adSlots: AdSlot[], isLive: boolean): DirectoryData {
+  return {
+    sites,
+    leftSlots: adSlots.filter((slot) => slot.position <= LEFT_RAIL_SLOTS),
+    rightSlots: adSlots.filter((slot) => slot.position > LEFT_RAIL_SLOTS),
+    stats: computeStats(sites),
+    isLive,
+  }
 }
 
-/** Always render six slots, inventing open placeholders for any gaps. */
+/** Always render every slot, inventing open placeholders for any gaps. */
 function fillSlots(rows: Partial<AdSlot>[]): AdSlot[] {
-  return Array.from({ length: 6 }, (_, index) => {
+  return Array.from({ length: AD_SLOT_COUNT }, (_, index) => {
     const position = index + 1
     const found = rows.find((row) => row.position === position)
     return {
@@ -107,27 +99,6 @@ export function computeStats(sites: Site[]): Stats {
     newest: newest ? { name: newest.name, created_at: newest.created_at } : null,
     topThisWeek,
   }
-}
-
-export function computeWeek(sites: Site[]): WeekStats {
-  const cutoff = Date.now() - WEEK_MS
-
-  const newSites = sites.filter((site) => Date.parse(site.created_at) >= cutoff).length
-
-  const earnedThisWeek = sites.reduce(
-    (sum, site) =>
-      site.trend_percent && site.trend_percent > 0
-        ? sum + site.revenue_amount * (site.trend_percent / 100)
-        : sum,
-    0,
-  )
-
-  // "Went viral": revenue up 25% or more since the last reading. Revenue here
-  // is sourced from public X posts, so a site whose number jumped is a site
-  // people are posting about. Momentum, not an audited weekly figure.
-  const wentViral = sites.filter((site) => (site.trend_percent ?? 0) >= 25).length
-
-  return { newSites, earnedThisWeek, wentViral }
 }
 
 export function topEarners(sites: Site[], count = 5): Site[] {

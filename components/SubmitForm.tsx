@@ -1,11 +1,17 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { MODEL_LABELS, MODEL_TYPES, ONE_LINER_MAX } from '@/lib/types'
 
 type Status = { kind: 'idle' | 'sending' | 'done' } | { kind: 'error'; message: string }
 
+/** A site cannot launch in the future, and this directory starts at 2020. */
+const MIN_LAUNCH_DATE = '2020-01-01'
+
 export default function SubmitForm({ onDone }: { onDone?: () => void }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const router = useRouter()
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [oneLiner, setOneLiner] = useState('')
   const [name, setName] = useState('')
@@ -55,6 +61,9 @@ export default function SubmitForm({ onDone }: { onDone?: () => void }) {
       setOneLiner('')
       setName('')
       setStatus({ kind: 'done' })
+      // Submissions are auto-approved, so re-render the server component to
+      // pull the new site into the directory straight away.
+      router.refresh()
     } catch {
       setStatus({ kind: 'error', message: 'Network error. Try again.' })
     }
@@ -70,7 +79,7 @@ export default function SubmitForm({ onDone }: { onDone?: () => void }) {
         </div>
         <p className="mt-3 text-[14px] font-semibold text-ink">Got it.</p>
         <p className="mt-1 text-[12.5px] text-muted">
-          We&apos;ll review and add your site within 24 hours.
+          Your site is live in the directory now.
         </p>
         <div className="mt-4 flex justify-center gap-2">
           <button type="button" onClick={() => setStatus({ kind: 'idle' })} className="btn-ghost">
@@ -156,7 +165,14 @@ export default function SubmitForm({ onDone }: { onDone?: () => void }) {
           <label className="field-label" htmlFor="sf-launched">
             Launch date
           </label>
-          <input id="sf-launched" name="launched_at" type="date" className="field" />
+          <input
+            id="sf-launched"
+            name="launched_at"
+            type="date"
+            min={MIN_LAUNCH_DATE}
+            max={today}
+            className="field"
+          />
         </div>
       </div>
 

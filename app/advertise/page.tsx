@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import Footer from '@/components/Footer'
 import AdvertiseForm from '@/components/AdvertiseForm'
 import { getDirectoryData } from '@/lib/data'
 import { AD_SLOT_PRICE_USD } from '@/lib/types'
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 }
 
 export default async function AdvertisePage() {
-  const { adSlots } = await getDirectoryData()
+  const { leftSlots, rightSlots } = await getDirectoryData()
 
   return (
     <main className="mx-auto max-w-[560px] px-4 py-12">
@@ -26,8 +27,9 @@ export default async function AdvertisePage() {
       </p>
 
       <div className="mt-6 rounded-xl border border-line p-5">
-        <AdvertiseForm slots={adSlots} />
+        <AdvertiseForm slots={[...leftSlots, ...rightSlots]} />
       </div>
+      <Footer />
     </main>
   )
 }

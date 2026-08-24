@@ -54,25 +54,11 @@ export type AdSlot = {
   is_active: boolean
 }
 
-export type Submission = {
-  id: string
-  name: string
-  url: string
-  model_type: ModelType
-  created_at: string
-}
-
 export type Stats = {
   totalEarned: number
   sitesTracked: number
   newest: { name: string; created_at: string } | null
   topThisWeek: { name: string; gain: number } | null
-}
-
-export type WeekStats = {
-  newSites: number
-  earnedThisWeek: number
-  wentViral: number
 }
 
 export const AD_SLOT_PRICE_USD = 50

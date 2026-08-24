@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import Footer from '@/components/Footer'
 import SubmitForm from '@/components/SubmitForm'
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ export default function SubmitPage() {
 
       <h1 className="mt-4 text-[22px] font-bold tracking-tight">List your site</h1>
       <p className="mt-1 text-[13px] text-muted">
-        Free, and reviewed within 24 hours.
+        Free, and live in the directory the moment you submit.
       </p>
 
       <ul className="mt-5 space-y-1.5 rounded-lg border border-line bg-subtle p-4">
@@ -38,6 +39,7 @@ export default function SubmitPage() {
       <div className="mt-6 rounded-xl border border-line p-5">
         <SubmitForm />
       </div>
+      <Footer />
     </main>
   )
 }
