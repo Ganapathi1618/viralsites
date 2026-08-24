@@ -93,20 +93,33 @@ calls, so a half-configured deploy cannot leave the endpoint open.
 1. Import the repo. If it lives in a subdirectory, set the project's **Root
    Directory** to that folder.
 2. Add every variable from `.env.example` to the project's environment.
-3. Deploy. `vercel.json` registers the cron:
+3. Deploy. `vercel.json` registers a daily cron:
 
    ```json
-   { "crons": [{ "path": "/api/cron/scrape", "schedule": "0 */6 * * *" }] }
+   { "crons": [{ "path": "/api/cron/scrape", "schedule": "0 3 * * *" }] }
    ```
 
    Vercel sends `Authorization: Bearer $CRON_SECRET` automatically once
    `CRON_SECRET` is set on the project.
 
-   **The Hobby plan only allows one cron run per day.** For a true six-hour
-   cadence, either upgrade to Pro or use the included GitHub Actions workflow
-   (`.github/workflows/scrape.yml`), which curls the same endpoint on a
-   schedule. It needs the `SITE_URL` and `CRON_SECRET` repository secrets, and
-   it only runs if this project is the repository root.
+### Why the Vercel cron is daily, not every six hours
+
+The Hobby plan allows **one cron run per day**, and Vercel rejects the entire
+deployment — not just the cron — if `vercel.json` asks for more. A six-hour
+expression fails the build with "Hobby accounts are limited to daily cron jobs".
+
+So the six-hour cadence lives in **`.github/workflows/scrape.yml`** instead,
+which curls the same endpoint on GitHub's scheduler. Set two repository secrets
+under Settings → Secrets and variables → Actions:
+
+| Secret | Value |
+| --- | --- |
+| `SITE_URL` | the deployment's URL, e.g. `https://viralsites.vercel.app` |
+| `CRON_SECRET` | the same value set in the Vercel project env |
+
+Both schedules hit the same authenticated endpoint and are safe to run
+together — a scrape is idempotent. On Pro, set `vercel.json` back to
+`0 */6 * * *` and delete the workflow.
 
 ## Design
 
