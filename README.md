@@ -292,6 +292,34 @@ badge stays hidden with a key set, `curl /api/online` and check the `reason`.
 Self-hosting: point `NEXT_PUBLIC_UMAMI_SRC` and `UMAMI_API_URL` at your
 instance.
 
+## Brand assets
+
+The mark is a white "V" on `#0066ff`, rendered from `scripts/brand/` rather than
+hand-drawn, so regenerating at another size is a one-liner.
+
+| File | Purpose |
+| --- | --- |
+| `app/icon.png` | 256px PNG, linked automatically by Next |
+| `app/apple-icon.png` | 180px, iOS home screen |
+| `public/favicon.ico` | 16/32/48 in one container, for `/favicon.ico` hits |
+| `public/favicon.png` | 512px PNG |
+| `public/og.png` | 1200×630 share card |
+
+`og:image` must be an absolute URL — X and Slack reject relative ones — so it is
+resolved against `metadataBase`. That falls back to `https://viralsites.fyi`,
+and deliberately ignores a `NEXT_PUBLIC_SITE_URL` pointing at localhost in
+production, since a stale local value would publish a dead image URL on every
+share.
+
+Regenerate after a design change:
+
+```bash
+npm run brand   # renders every PNG, then repacks favicon.ico
+```
+
+Edit `scripts/brand/icon.html` or `scripts/brand/og.html` and re-run; the assets
+are plain CSS, so a colour or wording change is a one-line edit.
+
 ## Design
 
 White (`#ffffff`), `#f5f5f5` fills, `#ebebeb` borders, `#0066ff` for actions and

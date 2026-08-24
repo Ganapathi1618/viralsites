@@ -11,7 +11,8 @@
     "scrape": "tsx scripts/scrape.ts",
     "test:scraper": "tsx scripts/test-scraper.ts",
     "test:rotation": "tsx scripts/test-rotation.ts",
-    "test": "npm run test:scraper && npm run test:rotation"
+    "test": "npm run test:scraper && npm run test:rotation",
+    "brand": "node scripts/brand/render.js && node scripts/brand/pack-ico.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
@@ -27,6 +28,7 @@
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.35",
+    "playwright-core": "^1.62.1",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
     "tsx": "^4.23.12",
