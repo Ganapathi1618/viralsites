@@ -100,8 +100,13 @@ export async function POST(request: Request) {
   // design — the anon key must never be able to write the directory.
   const admin = getSupabaseAdmin()
   if (!admin) {
-    console.warn('[submit] no service role key; saved the submission but could not publish')
-    return NextResponse.json({ ok: true, published: false }, { status: 201 })
+    console.error(
+      '[submit] SUPABASE_SERVICE_ROLE_KEY is not set — the submission was saved but the site was NOT added to the directory',
+    )
+    return NextResponse.json(
+      { ok: true, published: false, reason: 'missing-service-role-key' },
+      { status: 201 },
+    )
   }
 
   const { error: publishError } = await admin.from('sites').upsert(
@@ -124,7 +129,10 @@ export async function POST(request: Request) {
 
   if (publishError) {
     console.error('[submit] publish failed:', publishError.message)
-    return NextResponse.json({ ok: true, published: false }, { status: 201 })
+    return NextResponse.json(
+      { ok: true, published: false, reason: publishError.message },
+      { status: 201 },
+    )
   }
 
   return NextResponse.json({ ok: true, published: true }, { status: 201 })

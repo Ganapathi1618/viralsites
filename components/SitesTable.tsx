@@ -126,10 +126,15 @@ export default function SitesTable({
       <div className="flex flex-col items-center gap-2.5 border-t border-line bg-subtle py-4">
         <p className="num text-[11.5px] text-muted">
           Showing {shown.length} of {sites.length} {sites.length === 1 ? 'site' : 'sites'}
+          {/* Say so explicitly: a missing button otherwise reads as broken. */}
+          {hasMore ? null : <span className="ml-1.5">· that&apos;s all of them</span>}
         </p>
         {hasMore ? (
           <button type="button" onClick={onLoadMore} className="btn-ghost">
             Load more
+            <span className="num text-[11px] text-muted">
+              +{Math.min(PAGE_SIZE, sites.length - shown.length)}
+            </span>
           </button>
         ) : null}
       </div>

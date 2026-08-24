@@ -35,7 +35,10 @@ export async function getDirectoryData(): Promise<DirectoryData> {
 
   const [sitesResult, slotsResult] = await Promise.all([
     supabase.from('sites').select(SITE_COLUMNS).order('revenue_amount', { ascending: false }).limit(250),
-    supabase.from('ad_slots').select('id,position,company_name,company_url,one_liner,is_active').order('position'),
+    supabase
+      .from('ad_slots')
+      .select('id,position,company_name,company_url,one_liner,is_active,stripe_subscription_id')
+      .order('position'),
   ])
 
   if (sitesResult.error) console.error('[data] sites:', sitesResult.error.message)
@@ -84,18 +87,31 @@ export function rotateActiveSlots(slots: AdSlot[], now = Date.now()): AdSlot[] {
   return slots.map((slot) => (slot.is_active ? order[next++] : slot))
 }
 
-/** Always render every slot, inventing open placeholders for any gaps. */
-function fillSlots(rows: Partial<AdSlot>[]): AdSlot[] {
+export type AdSlotRow = Partial<AdSlot> & { stripe_subscription_id?: string | null }
+
+/**
+ * Always render every slot, inventing open placeholders for any gaps.
+ *
+ * A slot only counts as sold if it carries a Stripe subscription id. `is_active`
+ * alone is not enough: rows seeded by hand (or left behind by an older seed)
+ * would otherwise show as sponsors that nobody is paying for. To place a
+ * comped sponsor manually, set stripe_subscription_id to 'manual'.
+ *
+ * The subscription id is dropped here and never reaches the browser.
+ */
+export function fillSlots(rows: AdSlotRow[]): AdSlot[] {
   return Array.from({ length: AD_SLOT_COUNT }, (_, index) => {
     const position = index + 1
     const found = rows.find((row) => row.position === position)
+    const sold = Boolean(found?.is_active && found?.stripe_subscription_id)
+
     return {
       id: found?.id ?? `open-${position}`,
       position,
-      company_name: found?.company_name ?? null,
-      company_url: found?.company_url ?? null,
-      one_liner: found?.one_liner ?? null,
-      is_active: Boolean(found?.is_active),
+      company_name: sold ? (found?.company_name ?? null) : null,
+      company_url: sold ? (found?.company_url ?? null) : null,
+      one_liner: sold ? (found?.one_liner ?? null) : null,
+      is_active: sold,
     }
   })
 }

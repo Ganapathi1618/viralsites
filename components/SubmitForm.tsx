@@ -4,7 +4,12 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { MODEL_LABELS, MODEL_TYPES, ONE_LINER_MAX } from '@/lib/types'
 
-type Status = { kind: 'idle' | 'sending' | 'done' } | { kind: 'error'; message: string }
+type Status =
+  | { kind: 'idle' | 'sending' }
+  // `published` false means the row was saved but the directory could not be
+  // written — the deployment is missing its service role key.
+  | { kind: 'done'; published: boolean }
+  | { kind: 'error'; message: string }
 
 /** A site cannot launch in the future, and this directory starts at 2020. */
 const MIN_LAUNCH_DATE = '2020-01-01'
@@ -50,7 +55,7 @@ export default function SubmitForm({ onDone }: { onDone?: () => void }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(data),
       })
-      const payload = (await response.json()) as { error?: string }
+      const payload = (await response.json()) as { error?: string; published?: boolean }
 
       if (!response.ok) {
         setStatus({ kind: 'error', message: payload.error ?? 'Something went wrong.' })
@@ -60,7 +65,7 @@ export default function SubmitForm({ onDone }: { onDone?: () => void }) {
       form.reset()
       setOneLiner('')
       setName('')
-      setStatus({ kind: 'done' })
+      setStatus({ kind: 'done', published: payload.published !== false })
       // Submissions are auto-approved, so re-render the server component to
       // pull the new site into the directory straight away.
       router.refresh()
@@ -72,14 +77,28 @@ export default function SubmitForm({ onDone }: { onDone?: () => void }) {
   if (status.kind === 'done') {
     return (
       <div className="py-6 text-center">
-        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-money/10">
-          <svg viewBox="0 0 20 20" className="h-5 w-5 text-money" fill="none" stroke="currentColor" strokeWidth="2">
+        <div
+          className={`mx-auto flex h-11 w-11 items-center justify-center rounded-full ${
+            status.published ? 'bg-money/10' : 'bg-[#f59e0b]/10'
+          }`}
+        >
+          <svg
+            viewBox="0 0 20 20"
+            className={`h-5 w-5 ${status.published ? 'text-money' : 'text-[#b45309]'}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-        <p className="mt-3 text-[14px] font-semibold text-ink">Got it.</p>
+        <p className="mt-3 text-[14px] font-semibold text-ink">
+          {status.published ? 'Got it.' : 'Saved, but not published.'}
+        </p>
         <p className="mt-1 text-[12.5px] text-muted">
-          Your site is live in the directory now.
+          {status.published
+            ? 'Your site is live in the directory now.'
+            : 'Your submission was stored, but the directory could not be written. The deployment is missing SUPABASE_SERVICE_ROLE_KEY — check /api/health.'}
         </p>
         <div className="mt-4 flex justify-center gap-2">
           <button type="button" onClick={() => setStatus({ kind: 'idle' })} className="btn-ghost">
