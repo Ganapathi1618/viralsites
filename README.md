@@ -52,8 +52,42 @@ npm run dev
 
 It boots with no environment variables at all: the directory falls back to the
 bundled demo data in `lib/demo-data.ts` and the stats bar says
-`demo data — connect Supabase`. Stripe and the scraper degrade the same way,
-each returning a clear "not configured" message rather than failing silently.
+`demo data — Supabase not configured`.
+
+**That fallback fires in exactly one case: no Supabase credentials.** Once the
+credentials are set, the real rows are the only source — a failed query shows
+an error banner naming the reason, and an empty table shows an empty state.
+Neither is quietly replaced with demo rows, because a broken connection that
+renders plausible data is indistinguishable from a working one.
+
+### Where the numbers come from
+
+Every figure is a Supabase query, none are hardcoded:
+
+| Element | Query |
+| --- | --- |
+| Table | `sites` ordered by `revenue_amount` desc, ten rows at a time by offset |
+| Header counter | Row count and revenue sum across every row |
+| Stats bar | Sum, count, newest by `created_at`, top earner by revenue |
+| Top earners strip | First five of the revenue-ordered summary pass |
+| Sponsor rails | `ad_slots`, rotated daily |
+
+Totals come from a lightweight second pass (`id,name,url,revenue_amount,
+created_at`, capped at 1000 rows) so they cover the whole table rather than the
+page on screen. Past a thousand sites, move that to a Postgres view or an RPC
+returning the aggregates directly.
+
+Pages after the first are fetched from `/api/sites?offset=&limit=`, so "Load
+more" is real offset pagination rather than slicing a preloaded array.
+
+`export const revalidate = 60` on the page means new submissions and scraper
+writes appear within a minute, with no redeploy.
+
+### If the page shows demo data on a deployment
+
+`NEXT_PUBLIC_*` variables are inlined **at build time**. Adding them in Vercel
+after a deploy does nothing until you redeploy. Check `/api/health` — it
+reports which secrets are present and how many rows it can read.
 
 ## Supabase
 
@@ -205,9 +239,33 @@ workflow.
 | `STRIPE_WEBHOOK_SECRET` | for payments | Webhook signature verification |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | no | Only if you replace hosted Checkout with Stripe.js |
 | `NEXT_PUBLIC_DODO_CHECKOUT_URL` | no | Hosted Dodo checkout; falls back to the current link |
+| `NEXT_PUBLIC_UMAMI_WEBSITE_ID` | no | Loads the Umami script when set |
+| `NEXT_PUBLIC_UMAMI_SRC` | no | Script URL; defaults to Umami Cloud |
+| `UMAMI_API_URL` | no | API base; defaults to Umami Cloud |
+| `UMAMI_API_KEY` | no | Server-only, powers the online badge |
 | `NEXT_PUBLIC_SITE_URL` | recommended | Absolute URLs for redirects and metadata |
 | `CRON_SECRET` | yes in prod | Guards `/api/cron/scrape` |
 | `SCRAPER_SOURCE_URLS` | no | Comma-separated; defaults to outbid.lol,outbid.fyi |
+
+## Analytics and the live counter
+
+Optional, and off unless configured. Set `NEXT_PUBLIC_UMAMI_WEBSITE_ID` and the
+tracking script loads; leave it unset and local and preview builds send nothing.
+
+The header's "● X online now" badge reads Umami's realtime API through
+`/api/online`, so `UMAMI_API_KEY` stays on the server — that endpoint is not
+CORS-open to browsers and the key must never ship to one. The badge renders
+nothing at all until a number arrives, so a missing or failing Umami setup
+leaves no empty chrome behind.
+
+Umami has returned the active-visitor figure in several shapes across versions,
+so the response is parsed leniently (`5`, `{x:5}`, `[{x:5}]`, `{visitors:5}`)
+and anything unrecognised becomes `null`. **This has not been verified against a
+live Umami account** — the sandbox this was built in cannot reach it. If the
+badge stays hidden with a key set, `curl /api/online` and check the `reason`.
+
+Self-hosting: point `NEXT_PUBLIC_UMAMI_SRC` and `UMAMI_API_URL` at your
+instance.
 
 ## Design
 
@@ -220,18 +278,14 @@ component classes (`.card`, `.field`, `.btn-primary`, `.num`) in
 
 ## Derived numbers, and what they actually mean
 
-The schema stores a current revenue figure and a trend, not a time series. Three
-things in the UI are therefore derived, and are approximations by construction:
+Every stat-bar figure is now a direct aggregate of `sites`. One thing remains
+derived: the drawer's **revenue movement** shows two points — today's figure and
+the previous one implied by `trend_percent` — because the schema stores a
+current figure and a trend, not a time series. It is labelled as such rather
+than drawn as a history.
 
-- **Top earner this week** — the largest implied gain (`revenue × trend%`). It
-  ranks momentum, not audited weekly takings.
-- **Earned this week** — the sum of those implied gains.
-- **Went viral** — sites whose revenue moved 25% or more since the last reading.
-- **Revenue movement** (in the drawer) — two points: today's figure, and the
-  previous one implied by the trend. Not a full history, and labelled as such.
-
-Storing a `revenue_history` table would make all four exact. Worth doing once
-the scraper has been running long enough to have a history to store.
+A `revenue_history` table would make it exact. Worth adding once the scraper has
+run long enough to have a history to store.
 
 ## Scripts
 

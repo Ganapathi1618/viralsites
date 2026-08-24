@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
+import Script from 'next/script'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
@@ -22,9 +23,17 @@ export const metadata: Metadata = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Analytics load only once a website id is configured, so local and preview
+  // builds send nothing.
+  const umamiId = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID
+  const umamiSrc = process.env.NEXT_PUBLIC_UMAMI_SRC || 'https://cloud.umami.is/script.js'
+
   return (
     <html lang="en" className={`${inter.variable} ${mono.variable}`}>
-      <body className="bg-page font-sans text-ink antialiased">{children}</body>
+      <body className="bg-page font-sans text-ink antialiased">
+        {children}
+        {umamiId ? <Script src={umamiSrc} data-website-id={umamiId} strategy="afterInteractive" /> : null}
+      </body>
     </html>
   )
 }

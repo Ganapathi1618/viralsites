@@ -1,19 +1,28 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+/**
+ * Browser-safe Supabase client.
+ *
+ * NEXT_PUBLIC_ variables are inlined at build time, so these must be set on the
+ * build, not just at runtime — adding them to Vercel after a deploy needs a
+ * redeploy to take effect. Values are trimmed because a trailing newline
+ * pasted into a dashboard field produces a URL that fails to parse.
+ */
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
 
-/** True when the public Supabase env vars are present. */
 export const isSupabaseConfigured = Boolean(url && anonKey)
 
-/**
- * Read-only client used by server components to render the directory.
- * Returns null when Supabase is not configured, which lets the app boot with
- * the bundled demo data instead of crashing on a fresh clone.
- */
+let cached: SupabaseClient | null = null
+
 export function getSupabase(): SupabaseClient | null {
   if (!url || !anonKey) return null
-  return createClient(url, anonKey, {
-    auth: { persistSession: false },
-  })
+
+  if (!cached) {
+    cached = createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+  }
+
+  return cached
 }

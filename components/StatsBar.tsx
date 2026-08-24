@@ -17,7 +17,7 @@ export default function StatsBar({ stats, isLive }: { stats: Stats; isLive: bool
       <Cell
         label="Total earned"
         value={formatMoney(stats.totalEarned)}
-        sub={isLive ? 'across every listed site' : 'demo data — connect Supabase'}
+        sub={isLive ? 'across every listed site' : 'demo data — Supabase not configured'}
       />
       <Cell label="Sites tracked" value={String(stats.sitesTracked)} sub="one page, one revenue model" />
       <Cell
@@ -26,9 +26,9 @@ export default function StatsBar({ stats, isLive }: { stats: Stats; isLive: bool
         sub={stats.newest ? `added ${formatAgo(stats.newest.created_at)}` : undefined}
       />
       <Cell
-        label="Top earner this week"
-        value={stats.topThisWeek?.name ?? '—'}
-        sub={stats.topThisWeek ? `+${formatMoney(stats.topThisWeek.gain)} implied` : undefined}
+        label="Top earner"
+        value={stats.topEarner?.name ?? '—'}
+        sub={stats.topEarner ? formatMoney(stats.topEarner.revenue) : undefined}
       />
     </div>
   )

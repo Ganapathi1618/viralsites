@@ -6,26 +6,34 @@ import { Favicon, ModelTag, TrendCell, VerifiedMark } from './ui'
 
 const MEDALS = ['🥇', '🥈', '🥉']
 
-export const PAGE_SIZE = 10
-
 export default function SitesTable({
   sites,
-  visibleCount,
+  total,
+  loading,
+  error,
   onLoadMore,
   onSelect,
 }: {
   sites: Site[]
-  visibleCount: number
+  total: number
+  loading: boolean
+  error: string | null
   onLoadMore: () => void
   onSelect: (site: Site) => void
 }) {
-  const shown = sites.slice(0, visibleCount)
-  const hasMore = visibleCount < sites.length
+  const shown = sites
+  const hasMore = sites.length < total
   if (sites.length === 0) {
     return (
       <div className="rounded-lg border border-line px-6 py-14 text-center">
-        <p className="text-[14px] font-medium text-ink">Nothing matches this filter.</p>
-        <p className="mt-1 text-[12.5px] text-muted">Try another model, or submit a site you know.</p>
+        <p className="text-[14px] font-medium text-ink">No sites listed yet.</p>
+        <p className="mt-1 text-[12.5px] text-muted">
+          The table is empty — be the first to{' '}
+          <a href="/submit" className="text-brand hover:underline">
+            submit one
+          </a>
+          .
+        </p>
       </div>
     )
   }
@@ -125,16 +133,19 @@ export default function SitesTable({
 
       <div className="flex flex-col items-center gap-2.5 border-t border-line bg-subtle py-4">
         <p className="num text-[11.5px] text-muted">
-          Showing {shown.length} of {sites.length} {sites.length === 1 ? 'site' : 'sites'}
+          Showing {shown.length} of {total} {total === 1 ? 'site' : 'sites'}
           {/* Say so explicitly: a missing button otherwise reads as broken. */}
           {hasMore ? null : <span className="ml-1.5">· that&apos;s all of them</span>}
         </p>
+
+        {error ? <p className="text-[11.5px] text-down">{error}</p> : null}
+
         {hasMore ? (
-          <button type="button" onClick={onLoadMore} className="btn-ghost">
-            Load more
-            <span className="num text-[11px] text-muted">
-              +{Math.min(PAGE_SIZE, sites.length - shown.length)}
-            </span>
+          <button type="button" onClick={onLoadMore} disabled={loading} className="btn-ghost">
+            {loading ? 'Loading…' : 'Load more'}
+            {loading ? null : (
+              <span className="num text-[11px] text-muted">+{Math.min(10, total - shown.length)}</span>
+            )}
           </button>
         ) : null}
       </div>

@@ -1,8 +1,11 @@
 import { formatMoney, hostname } from '@/lib/format'
-import type { Site } from '@/lib/types'
+import type { SiteSummary } from '@/lib/data'
 
-/** Top five by revenue, as a horizontal strip above the table. */
-export default function TopEarnersRow({ sites }: { sites: Site[] }) {
+/**
+ * Top five by revenue across the whole table — computed from the summary pass,
+ * not from the page currently loaded, so paging does not change it.
+ */
+export default function TopEarnersRow({ sites }: { sites: SiteSummary[] }) {
   if (sites.length === 0) return null
 
   return (

@@ -3,9 +3,14 @@ import { DEMO_AD_SLOTS, DEMO_SITES } from './demo-data'
 import type { AdSlot, Site, Stats } from './types'
 
 /**
- * Reads for the directory. Every one degrades to the bundled demo data if
- * Supabase is unconfigured or the query fails, so a credential problem shows
- * up as a "demo data" badge rather than a 500.
+ * Reads for the directory.
+ *
+ * Demo data is used for exactly one case: Supabase is not configured at all, so
+ * a fresh clone still renders something. Once the credentials are present the
+ * real rows are the only source — a failed query surfaces as an error and an
+ * empty table surfaces as an empty state. Substituting demo rows there would
+ * make a broken connection look like a working one, which is precisely the bug
+ * that hid a misconfigured deployment.
  */
 
 /** Six sponsor slots: three in the left rail, three in the right. */
@@ -13,58 +18,159 @@ export const AD_SLOT_COUNT = 6
 const LEFT_RAIL_SLOTS = 3
 const DAY_MS = 86_400_000
 
+/** Rows per page in the table, and per "Load more" click. */
+export const PAGE_SIZE = 10
+
+/** Cap on the lightweight pass used for totals and the leaderboard. */
+const SUMMARY_LIMIT = 1000
+
 const SITE_COLUMNS =
   'id,name,url,description,model_type,revenue_amount,revenue_verified,revenue_source_url,trend_percent,launched_at,is_featured,created_at'
 
+/** Just enough columns to total revenue and rank the leaderboard. */
+const SUMMARY_COLUMNS = 'id,name,url,revenue_amount,created_at'
+
 export type DirectoryData = {
+  /** First page only; the rest arrive through /api/sites. */
   sites: Site[]
-  /** Left rail, positions 1-6. */
+  /** Total rows in `sites`, so the table knows when to stop paging. */
+  total: number
+  topEarners: SiteSummary[]
   leftSlots: AdSlot[]
-  /** Right rail, positions 7-9. */
   rightSlots: AdSlot[]
   stats: Stats
+  /** False only when Supabase is unconfigured and demo rows are showing. */
   isLive: boolean
+  /** Set when Supabase is configured but the query failed. */
+  error?: string
+}
+
+export type SiteSummary = {
+  id: string
+  name: string
+  url: string
+  revenue_amount: number
+  created_at: string
 }
 
 export async function getDirectoryData(): Promise<DirectoryData> {
   const supabase = getSupabase()
 
   if (!supabase) {
-    return build(DEMO_SITES, DEMO_AD_SLOTS, false)
+    console.warn('[data] NEXT_PUBLIC_SUPABASE_URL / ANON_KEY missing — serving demo data')
+    return demoDirectory()
   }
 
-  const [sitesResult, slotsResult] = await Promise.all([
-    supabase.from('sites').select(SITE_COLUMNS).order('revenue_amount', { ascending: false }).limit(250),
+  const [pageResult, summaryResult, slotsResult] = await Promise.all([
+    supabase
+      .from('sites')
+      .select(SITE_COLUMNS, { count: 'exact' })
+      .order('revenue_amount', { ascending: false })
+      .range(0, PAGE_SIZE - 1),
+    supabase
+      .from('sites')
+      .select(SUMMARY_COLUMNS)
+      .order('revenue_amount', { ascending: false })
+      .limit(SUMMARY_LIMIT),
     supabase
       .from('ad_slots')
       .select('id,position,company_name,company_url,one_liner,is_active,stripe_subscription_id')
       .order('position'),
   ])
 
-  if (sitesResult.error) console.error('[data] sites:', sitesResult.error.message)
-  if (slotsResult.error) console.error('[data] ad_slots:', slotsResult.error.message)
+  const adSlots = rotateActiveSlots(fillSlots((slotsResult.data ?? []) as AdSlotRow[]))
 
-  const rows = sitesResult.data ?? []
-  if (rows.length === 0) {
-    // An empty table means the schema has not been seeded yet.
-    return build(DEMO_SITES, DEMO_AD_SLOTS, false)
+  if (pageResult.error) {
+    console.error('[data] sites query failed:', pageResult.error.message)
+    return {
+      sites: [],
+      total: 0,
+      topEarners: [],
+      ...splitRails(adSlots),
+      stats: emptyStats(),
+      isLive: true,
+      error: pageResult.error.message || 'Could not reach the database.',
+    }
   }
 
-  const sites = rows.map(normalizeSite)
-  const adSlots = fillSlots((slotsResult.data ?? []) as Partial<AdSlot>[])
+  if (summaryResult.error) {
+    console.error('[data] summary query failed:', summaryResult.error.message)
+  }
 
-  return build(sites, adSlots, true)
-}
-
-function build(sites: Site[], adSlots: AdSlot[], isLive: boolean): DirectoryData {
-  const rotated = rotateActiveSlots(adSlots)
+  const summary = (summaryResult.data ?? []) as SiteSummary[]
 
   return {
-    sites,
-    leftSlots: rotated.filter((_, index) => index < LEFT_RAIL_SLOTS),
-    rightSlots: rotated.filter((_, index) => index >= LEFT_RAIL_SLOTS),
-    stats: computeStats(sites),
-    isLive,
+    sites: (pageResult.data ?? []).map(normalizeSite),
+    total: pageResult.count ?? summary.length,
+    topEarners: summary.slice(0, 5),
+    ...splitRails(adSlots),
+    stats: computeStats(summary, pageResult.count ?? summary.length),
+    isLive: true,
+  }
+}
+
+/** One page of the table, used by /api/sites for "Load more". */
+export async function getSitesPage(offset: number, limit = PAGE_SIZE) {
+  const supabase = getSupabase()
+  if (!supabase) {
+    return { sites: DEMO_SITES.slice(offset, offset + limit), total: DEMO_SITES.length }
+  }
+
+  const { data, error, count } = await supabase
+    .from('sites')
+    .select(SITE_COLUMNS, { count: 'exact' })
+    .order('revenue_amount', { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (error) throw new Error(error.message || 'Could not load more sites.')
+
+  return { sites: (data ?? []).map(normalizeSite), total: count ?? 0 }
+}
+
+function demoDirectory(): DirectoryData {
+  const adSlots = rotateActiveSlots(DEMO_AD_SLOTS)
+  const summary: SiteSummary[] = DEMO_SITES.map((site) => ({
+    id: site.id,
+    name: site.name,
+    url: site.url,
+    revenue_amount: site.revenue_amount,
+    created_at: site.created_at,
+  }))
+
+  return {
+    sites: DEMO_SITES.slice(0, PAGE_SIZE),
+    total: DEMO_SITES.length,
+    topEarners: summary.slice(0, 5),
+    ...splitRails(adSlots),
+    stats: computeStats(summary, DEMO_SITES.length),
+    isLive: false,
+  }
+}
+
+function splitRails(slots: AdSlot[]) {
+  return {
+    leftSlots: slots.filter((_, index) => index < LEFT_RAIL_SLOTS),
+    rightSlots: slots.filter((_, index) => index >= LEFT_RAIL_SLOTS),
+  }
+}
+
+function emptyStats(): Stats {
+  return { totalEarned: 0, sitesTracked: 0, newest: null, topEarner: null }
+}
+
+/** Totals across every row, not just the page on screen. */
+export function computeStats(summary: SiteSummary[], total: number): Stats {
+  if (summary.length === 0) return { ...emptyStats(), sitesTracked: total }
+
+  const totalEarned = summary.reduce((sum, site) => sum + Number(site.revenue_amount ?? 0), 0)
+  const newest = [...summary].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
+  const top = summary[0] // already ordered by revenue desc
+
+  return {
+    totalEarned,
+    sitesTracked: total,
+    newest: newest ? { name: newest.name, created_at: newest.created_at } : null,
+    topEarner: top ? { name: top.name, revenue: Number(top.revenue_amount ?? 0) } : null,
   }
 }
 
@@ -92,12 +198,12 @@ export type AdSlotRow = Partial<AdSlot> & { stripe_subscription_id?: string | nu
 /**
  * Always render every slot, inventing open placeholders for any gaps.
  *
- * A slot only counts as sold if it carries a Stripe subscription id. `is_active`
+ * A slot only counts as sold if it carries a payment reference. `is_active`
  * alone is not enough: rows seeded by hand (or left behind by an older seed)
  * would otherwise show as sponsors that nobody is paying for. To place a
  * comped sponsor manually, set stripe_subscription_id to 'manual'.
  *
- * The subscription id is dropped here and never reaches the browser.
+ * The reference is dropped here and never reaches the browser.
  */
 export function fillSlots(rows: AdSlotRow[]): AdSlot[] {
   return Array.from({ length: AD_SLOT_COUNT }, (_, index) => {
@@ -114,33 +220,6 @@ export function fillSlots(rows: AdSlotRow[]): AdSlot[] {
       is_active: sold,
     }
   })
-}
-
-export function computeStats(sites: Site[]): Stats {
-  const totalEarned = sites.reduce((sum, site) => sum + site.revenue_amount, 0)
-
-  const newest = [...sites].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
-
-  // "Top earner this week" has no weekly revenue column to read, so it is
-  // derived: the largest implied gain, revenue x trend%. Approximate by
-  // construction — it ranks momentum, not audited weekly takings.
-  let topThisWeek: Stats['topThisWeek'] = null
-  for (const site of sites) {
-    if (!site.trend_percent || site.trend_percent <= 0) continue
-    const gain = site.revenue_amount * (site.trend_percent / 100)
-    if (!topThisWeek || gain > topThisWeek.gain) topThisWeek = { name: site.name, gain }
-  }
-
-  return {
-    totalEarned,
-    sitesTracked: sites.length,
-    newest: newest ? { name: newest.name, created_at: newest.created_at } : null,
-    topThisWeek,
-  }
-}
-
-export function topEarners(sites: Site[], count = 5): Site[] {
-  return [...sites].sort((a, b) => b.revenue_amount - a.revenue_amount).slice(0, count)
 }
 
 function normalizeSite(row: Record<string, unknown>): Site {

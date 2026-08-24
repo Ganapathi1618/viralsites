@@ -2,16 +2,24 @@ import DirectoryView from '@/components/DirectoryView'
 import PageShell from '@/components/PageShell'
 import { getDirectoryData } from '@/lib/data'
 
-// The directory reflects scraper writes and new submissions, so it renders
-// per request rather than at build time.
-export const dynamic = 'force-dynamic'
+// Re-fetch from Supabase at most once a minute, so new submissions and scraper
+// writes appear without a redeploy.
+export const revalidate = 60
 
 export default async function HomePage() {
-  const { sites, leftSlots, rightSlots, stats, isLive } = await getDirectoryData()
+  const { sites, total, topEarners, leftSlots, rightSlots, stats, isLive, error } =
+    await getDirectoryData()
 
   return (
     <PageShell stats={stats} leftSlots={leftSlots} rightSlots={rightSlots}>
-      <DirectoryView sites={sites} stats={stats} isLive={isLive} />
+      <DirectoryView
+        initialSites={sites}
+        total={total}
+        topEarners={topEarners}
+        stats={stats}
+        isLive={isLive}
+        error={error}
+      />
     </PageShell>
   )
 }

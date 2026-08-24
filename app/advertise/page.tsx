@@ -4,7 +4,7 @@ import PageShell from '@/components/PageShell'
 import { getDirectoryData } from '@/lib/data'
 import { AD_SLOT_PRICE_USD } from '@/lib/types'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 export const metadata: Metadata = {
   title: 'Advertise',

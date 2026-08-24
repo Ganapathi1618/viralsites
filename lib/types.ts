@@ -55,10 +55,11 @@ export type AdSlot = {
 }
 
 export type Stats = {
+  /** Sum of revenue_amount across every row, not just the page on screen. */
   totalEarned: number
   sitesTracked: number
   newest: { name: string; created_at: string } | null
-  topThisWeek: { name: string; gain: number } | null
+  topEarner: { name: string; revenue: number } | null
 }
 
 export const AD_SLOT_PRICE_USD = 50
