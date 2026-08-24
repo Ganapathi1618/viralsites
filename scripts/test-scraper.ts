@@ -8,7 +8,7 @@
  * targets. If a real page stops matching all three, the cron route reports
  * `scraped: 0` rather than failing silently.
  */
-import { guessModelType, parseAmount, parseListings } from '../lib/scraper/parse'
+import { discoverLolDomains, guessModelType, parseAmount, parseListings } from '../lib/scraper/parse'
 
 let failures = 0
 
@@ -86,6 +86,35 @@ check('parseAmount M suffix', parseAmount('$1.2M') === 1_200_000)
 check('parseAmount no match', parseAmount('nothing here') === null)
 check('guessModelType sponsor', guessModelType('weekly sponsor placement') === 'sponsor')
 check('guessModelType default', guessModelType('mystery box') === 'bid')
+
+// --- .lol domain discovery ---------------------------------------------------
+console.log('domain discovery')
+
+const directoryHtml = `<!doctype html><html><body>
+  <a href="https://topapp.lol">TopApp</a>
+  <a href="http://www.warmap.lol/board">WARMAP</a>
+  <a href="https://outbid.lol">the original</a>
+  <p>Also worth a look: roastme.lol and pixelgrab.lol</p>
+  <a href="https://twitter.com/someone">not a board</a>
+  <a href="https://example.com">also not</a>
+  <img src="https://cdn.outbidstory.lol/logo.png">
+</body></html>`
+
+const domains = discoverLolDomains(directoryHtml, 'https://outbidstory.lol')
+
+check('finds linked .lol domains', domains.includes('topapp.lol'), domains)
+check('strips www and paths', domains.includes('warmap.lol'), domains)
+check('finds bare domains in prose', domains.includes('roastme.lol') && domains.includes('pixelgrab.lol'), domains)
+check('keeps other boards it links to', domains.includes('outbid.lol'), domains)
+check('skips the source itself', !domains.includes('outbidstory.lol'), domains)
+check('skips non-.lol hosts', !domains.some((d) => d.includes('twitter') || d.includes('example.com')), domains)
+check('deduplicates', new Set(domains).size === domains.length, domains)
+
+check(
+  'a subdomain of the source is still skipped only when identical',
+  discoverLolDomains('<a href="https://cdn.outbid.lol">x</a>', 'https://outbid.lol').includes('cdn.outbid.lol'),
+)
+check('empty input yields nothing', discoverLolDomains('<html></html>', 'https://outbid.lol').length === 0)
 
 console.log(failures === 0 ? '\nall scraper checks passed' : `\n${failures} check(s) failed`)
 process.exit(failures === 0 ? 0 : 1)

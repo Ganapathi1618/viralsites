@@ -6,7 +6,12 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 /**
- * Scheduled scrape of outbid.lol and outbid.fyi.
+ * Scheduled scrape of the configured sources (outbid.lol, outbid.fyi,
+ * outbidstory.lol, outbid-directory.lol by default).
+ *
+ * Two passes per source: the listing parsers pull revenue where the markup
+ * allows, and a discovery pass records every `.lol` domain linked from the
+ * page as a new board at zero revenue.
  *
  * Vercel Cron sends `Authorization: Bearer $CRON_SECRET` automatically. The
  * same header works for a manual run:
@@ -33,7 +38,8 @@ async function run(request: Request) {
   }
 
   console.log(
-    `[cron] scrape ok — ${result.scraped} parsed, ${result.inserted} new, ${result.updated} updated`,
+    `[cron] scrape ok — ${result.scraped} listings, ${result.discovered} domains, ` +
+      `${result.inserted} new, ${result.updated} updated, ${result.skipped} skipped`,
   )
   return NextResponse.json({ ...result, startedAt })
 }

@@ -1,10 +1,14 @@
-# Every-6-hour scrape, for when Vercel Cron cannot run at that frequency
-# (the Hobby plan limits cron to one run per day). Delete this file if
-# vercel.json is doing the job.
+# The every-6-hour scrape.
 #
-# Repository secrets required:
-#   SITE_URL     https://viralsites.fyi
+# This is the schedule that actually delivers six-hourly runs. vercel.json is
+# capped at one run per day because Vercel's Hobby plan rejects any cron more
+# frequent than daily — and rejects the whole deployment, not just the cron.
+#
+# Repository secrets required (Settings -> Secrets and variables -> Actions):
+#   SITE_URL     https://viralsites.vercel.app  (no trailing slash)
 #   CRON_SECRET  the same value set in the Vercel project env
+#
+# On Pro: set vercel.json to '0 */6 * * *' and delete this file.
 name: scrape
 
 on:

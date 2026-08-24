@@ -175,20 +175,37 @@ Locally: `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
 
 ## The scraper
 
-`lib/scraper/parse.ts` reads **outbid.lol** and **outbid.fyi** using three
-strategies in order: Next.js data payloads (`__NEXT_DATA__` and streamed
-`self.__next_f` chunks), JSON-LD `ItemList` blocks, then a regex sweep over
-anchors paired with a nearby dollar amount. The first strategy that yields rows
-wins; anything unparseable is skipped rather than guessed at.
+Sources by default: **outbid.lol**, **outbid.fyi**, **outbidstory.lol** and
+**outbid-directory.lol** (override with `SCRAPER_SOURCE_URLS`). A source that
+404s or blocks the bot is recorded as a per-source error and the run continues.
 
-Scraped rows are always written `revenue_verified: false` — a number lifted off
-a page is an estimate until a human attaches a public source. `trend_percent` is
+Each source gets two passes.
+
+**Listings** — three strategies in order: Next.js data payloads (`__NEXT_DATA__`
+and streamed `self.__next_f` chunks), JSON-LD `ItemList` blocks, then a regex
+sweep over anchors paired with a nearby dollar amount. First one to yield rows
+wins; anything unparseable is skipped rather than guessed at. These carry name,
+description and revenue.
+
+**Discovery** — every `.lol` domain the page links to, as bare hostnames. New
+ones are inserted as `model_type: 'bid'` with `revenue_amount: 0` and no
+description, waiting for a listing parse or a human to give them numbers. This
+pass is deliberately dumber and therefore much harder to break: when a source
+redesigns and the listing parsers go quiet, new boards still get found.
+
+Deduplication is by hostname, so the same board stored as `http` or with a
+trailing slash is not inserted twice. Discovery inserts are capped at 100 per
+run so a source that suddenly links out to hundreds of hosts cannot flood the
+table in one pass.
+
+Everything written is `revenue_verified: false` — a number lifted off a page is
+an estimate, and a discovered domain has no number at all. `trend_percent` is
 recomputed from the previous and current readings, so the trend column always
 compares two real numbers.
 
-Neither source publishes an API or versions its markup, so all three strategies
-can break at once. When that happens the run reports `scraped: 0` with an
-explanatory `error` instead of quietly succeeding — worth alerting on.
+None of these sources publish an API or version their markup. When a run finds
+nothing anywhere it reports `scraped: 0, discovered: 0` with an explanatory
+`error` instead of quietly succeeding — worth alerting on.
 
 ```bash
 npm run test:scraper   # fixture tests for all three strategies
@@ -208,15 +225,17 @@ deploy cannot leave the endpoint open.
 
 ### Cron: why daily here, six-hourly on GitHub
 
-`vercel.json` schedules `0 3 * * *` — once a day.
+`vercel.json` schedules `0 3 * * *` — once a day, and that is not an oversight.
 
 **The Hobby plan allows one cron run per day, and Vercel rejects the entire
 deployment if `vercel.json` asks for more** ("Hobby accounts are limited to
-daily cron jobs"). A `0 */6 * * *` expression fails the build outright.
+daily cron jobs"). A `0 */6 * * *` expression fails the build outright, so
+setting it would take the site down rather than scrape more often.
 
-So the six-hour cadence lives in `.github/workflows/scrape.yml`, which curls the
-same authenticated endpoint on GitHub's scheduler. Add two repository secrets
-under Settings → Secrets and variables → Actions:
+The six-hour cadence therefore lives in `.github/workflows/scrape.yml`, which
+curls the same authenticated endpoint on GitHub's scheduler — same result, no
+plan limit. Add two repository secrets under Settings → Secrets and variables →
+Actions:
 
 | Secret | Value |
 | --- | --- |
@@ -249,8 +268,14 @@ workflow.
 
 ## Analytics and the live counter
 
-Optional, and off unless configured. Set `NEXT_PUBLIC_UMAMI_WEBSITE_ID` and the
-tracking script loads; leave it unset and local and preview builds send nothing.
+The tracking script is in `<head>` in `app/layout.tsx`. The website id comes
+from `NEXT_PUBLIC_UMAMI_WEBSITE_ID` and falls back to the production id in that
+file, so tracking works even if the env var is missing from a deployment. A
+Umami website id is public by design — it ships in the page source of every
+site that uses one.
+
+Note that this means local and preview builds report into the same Umami site
+unless you set `NEXT_PUBLIC_UMAMI_WEBSITE_ID` to something else there.
 
 The header's "● X online now" badge reads Umami's realtime API through
 `/api/online`, so `UMAMI_API_KEY` stays on the server — that endpoint is not

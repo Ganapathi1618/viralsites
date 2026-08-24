@@ -32,7 +32,53 @@ const USER_AGENT =
 export function sourceUrls(): string[] {
   const configured = process.env.SCRAPER_SOURCE_URLS
   if (configured) return configured.split(',').map((url) => url.trim()).filter(Boolean)
-  return ['https://outbid.lol', 'https://outbid.fyi']
+  return [
+    'https://outbid.lol',
+    'https://outbid.fyi',
+    'https://outbidstory.lol',
+    'https://outbid-directory.lol',
+  ]
+}
+
+/**
+ * Every `.lol` domain linked from a page, as bare hostnames.
+ *
+ * This is the cheap discovery pass: it finds boards a source links to without
+ * needing to understand the page's layout, which is what makes it survive a
+ * redesign that breaks the richer listing parsers above. Nothing here carries a
+ * revenue figure — discovered domains are recorded at zero and wait for a
+ * listing parse, or a human, to give them a number.
+ */
+export function discoverLolDomains(html: string, source: string): string[] {
+  const found = new Set<string>()
+
+  let sourceHost = ''
+  try {
+    sourceHost = new URL(source).hostname.replace(/^www\./, '')
+  } catch {
+    // A malformed source url just means nothing is excluded.
+  }
+
+  // Hostnames in href/src attributes, then any bare foo.lol in the text.
+  const patterns = [
+    /https?:\/\/([a-z0-9-]+(?:\.[a-z0-9-]+)*\.lol)\b/gi,
+    /\b([a-z0-9-]{2,}(?:\.[a-z0-9-]+)*\.lol)\b/gi,
+  ]
+
+  for (const pattern of patterns) {
+    for (const match of html.matchAll(pattern)) {
+      const host = match[1].toLowerCase().replace(/^www\./, '')
+
+      if (host === sourceHost) continue
+      if (host.length > 100) continue
+      // Skip file names that happen to end in .lol and obvious non-domains.
+      if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.lol$/.test(host)) continue
+
+      found.add(host)
+    }
+  }
+
+  return [...found]
 }
 
 export async function fetchSource(url: string): Promise<string> {
