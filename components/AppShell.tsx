@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import AdvertiseForm from './AdvertiseForm'
-import FilterTabs, { applyFilter, type FilterId } from './FilterTabs'
+import Footer from './Footer'
 import Header from './Header'
 import LeftSidebar from './LeftSidebar'
 import Modal from './Modal'
@@ -11,27 +11,19 @@ import SiteDrawer from './SiteDrawer'
 import SitesTable, { PAGE_SIZE } from './SitesTable'
 import StatsBar from './StatsBar'
 import SubmitForm from './SubmitForm'
-import Footer from './Footer'
+import TopEarnersRow from './TopEarnersRow'
 import type { DirectoryData } from '@/lib/data'
 import type { Site } from '@/lib/types'
 
 export default function AppShell({ data }: { data: DirectoryData }) {
   const { sites, leftSlots, rightSlots, stats, isLive } = data
 
-  const [filter, setFilter] = useState<FilterId>('all')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [drawerSite, setDrawerSite] = useState<Site | null>(null)
   const [submitOpen, setSubmitOpen] = useState(false)
   const [advertiseOpen, setAdvertiseOpen] = useState(false)
   const [slotPosition, setSlotPosition] = useState<number | undefined>()
 
-  const visible = useMemo(() => applyFilter(sites, filter), [sites, filter])
-
-  // A new filter starts the list over at the first page.
-  function changeFilter(next: FilterId) {
-    setFilter(next)
-    setVisibleCount(PAGE_SIZE)
-  }
   const leaders = useMemo(
     () => [...sites].sort((a, b) => b.revenue_amount - a.revenue_amount).slice(0, 5),
     [sites],
@@ -65,7 +57,7 @@ export default function AppShell({ data }: { data: DirectoryData }) {
           }`}
         >
           {checkoutState === 'success'
-            ? "Payment received — your slot goes live once we add your copy. Check your email."
+            ? 'Payment received — your slot goes live once we add your copy. Check your email.'
             : 'Checkout cancelled. Nothing was charged.'}
           <button
             type="button"
@@ -78,48 +70,36 @@ export default function AppShell({ data }: { data: DirectoryData }) {
         </div>
       ) : null}
 
-      {/* Three columns: the sidebars are fixed, only the middle scrolls. */}
+      {/*
+        Three columns. Both rails are pinned to exactly the viewport height
+        below the header and never scroll — three compact slots plus the CTA
+        fit inside it. Only the middle column scrolls. Below lg the rails move
+        into the flow and the page scrolls normally.
+      */}
       <div className="mx-auto max-w-shell px-4 pt-14 lg:h-screen">
         <div className="lg:flex lg:h-full lg:gap-6">
-          <aside className="hidden shrink-0 py-5 lg:block lg:w-[200px]">
-            <div className="scroll-area h-full overflow-y-auto pr-1">
-              <LeftSidebar slots={leftSlots} onAdvertise={openAdvertise} />
-            </div>
+          <aside className="hidden shrink-0 lg:block lg:h-[calc(100vh-3.5rem)] lg:w-[200px] lg:overflow-hidden lg:py-4">
+            <LeftSidebar slots={leftSlots} onAdvertise={openAdvertise} />
           </aside>
 
           <main className="scroll-area min-w-0 flex-1 py-5 lg:h-full lg:overflow-y-auto">
-            <div className="mb-4">
-              <h1 className="text-[19px] font-bold tracking-tight text-ink">
-                Viral one-page money sites
-              </h1>
-              <p className="mt-0.5 text-[12.5px] text-muted">
-                One page, one gimmick, real revenue. Figures sourced from public posts on X.
-              </p>
-            </div>
-
             <StatsBar stats={stats} isLive={isLive} />
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <FilterTabs active={filter} onChange={changeFilter} sites={sites} />
-              <span className="num text-[11.5px] text-muted">
-                {visible.length} {visible.length === 1 ? 'site' : 'sites'}
-              </span>
-            </div>
+            <TopEarnersRow sites={leaders} />
 
-            <div className="mt-3 pb-8">
+            <div className="mt-5">
               <SitesTable
-                sites={visible}
+                sites={sites}
                 visibleCount={visibleCount}
                 onLoadMore={() => setVisibleCount((count) => count + PAGE_SIZE)}
                 onSelect={setDrawerSite}
               />
             </div>
 
-            {/* The sidebars are desktop-fixed; below lg they stack here. */}
-            <div className="grid gap-6 border-t border-line pt-6 sm:grid-cols-2 lg:hidden">
+            {/* The rails are desktop-only above; below lg they stack here. */}
+            <div className="mt-6 grid gap-6 border-t border-line pt-6 sm:grid-cols-2 lg:hidden">
               <LeftSidebar slots={leftSlots} onAdvertise={openAdvertise} />
               <RightSidebar
-                topEarners={leaders}
                 slots={rightSlots}
                 onAdvertise={openAdvertise}
                 onSubmit={() => setSubmitOpen(true)}
@@ -127,21 +107,16 @@ export default function AppShell({ data }: { data: DirectoryData }) {
             </div>
 
             <Footer
-              onNavigate={(target) =>
-                target === 'submit' ? setSubmitOpen(true) : openAdvertise()
-              }
+              onNavigate={(target) => (target === 'submit' ? setSubmitOpen(true) : openAdvertise())}
             />
           </main>
 
-          <aside className="hidden shrink-0 py-5 lg:block lg:w-[200px]">
-            <div className="scroll-area h-full overflow-y-auto pl-1">
-              <RightSidebar
-                topEarners={leaders}
-                slots={rightSlots}
-                onAdvertise={openAdvertise}
-                onSubmit={() => setSubmitOpen(true)}
-              />
-            </div>
+          <aside className="hidden shrink-0 lg:block lg:h-[calc(100vh-3.5rem)] lg:w-[200px] lg:overflow-hidden lg:py-4">
+            <RightSidebar
+              slots={rightSlots}
+              onAdvertise={openAdvertise}
+              onSubmit={() => setSubmitOpen(true)}
+            />
           </aside>
         </div>
       </div>

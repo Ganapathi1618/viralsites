@@ -9,7 +9,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "scrape": "tsx scripts/scrape.ts",
-    "test:scraper": "tsx scripts/test-scraper.ts"
+    "test:scraper": "tsx scripts/test-scraper.ts",
+    "test:rotation": "tsx scripts/test-rotation.ts",
+    "test": "npm run test:scraper && npm run test:rotation"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

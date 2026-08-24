@@ -41,14 +41,11 @@ export const DEMO_SITES: Site[] = SEEDS.map(
   }),
 )
 
-export const DEMO_AD_SLOTS: AdSlot[] = [
-  { id: 'slot-1', position: 1, company_name: 'outbid.lol', company_url: 'https://outbid.lol', one_liner: 'Pay more than the person above you.', is_active: true },
-  { id: 'slot-2', position: 2, company_name: 'million.dev', company_url: 'https://million.dev', one_liner: 'A million pixels, a dollar each.', is_active: true },
-  { id: 'slot-3', position: 3, company_name: 'theboard.fyi', company_url: 'https://theboard.fyi', one_liner: 'The leaderboard indie hackers watch.', is_active: true },
-  { id: 'slot-4', position: 4, company_name: null, company_url: null, one_liner: null, is_active: false },
-  { id: 'slot-5', position: 5, company_name: null, company_url: null, one_liner: null, is_active: false },
-  { id: 'slot-6', position: 6, company_name: null, company_url: null, one_liner: null, is_active: false },
-  { id: 'slot-7', position: 7, company_name: 'pixelwall.io', company_url: 'https://pixelwall.io', one_liner: 'Ten thousand pixels, resold quarterly.', is_active: true },
-  { id: 'slot-8', position: 8, company_name: 'rankme.fyi', company_url: 'https://rankme.fyi', one_liner: 'Climb the rank by paying, or shipping.', is_active: true },
-  { id: 'slot-9', position: 9, company_name: null, company_url: null, one_liner: null, is_active: false },
-]
+export const DEMO_AD_SLOTS: AdSlot[] = Array.from({ length: 6 }, (_, index) => ({
+  id: `slot-${index + 1}`,
+  position: index + 1,
+  company_name: null,
+  company_url: null,
+  one_liner: null,
+  is_active: false,
+}))

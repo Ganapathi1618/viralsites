@@ -4,9 +4,9 @@ import { useState } from 'react'
 import { AD_SLOT_PRICE_USD, ONE_LINER_MAX, type AdSlot } from '@/lib/types'
 
 const PERKS = [
-  'Shown to every visitor, in the left sidebar of the directory',
+  'Shown to every visitor, in the sidebar beside the ranking table',
   'Your logo letter, name, one-liner and a direct link',
-  'A fixed slot — no rotation, no auction, no ad network',
+  'Slots rotate every 24 hours, so every sponsor gets time in the top spot',
   'Cancel any time from the Stripe receipt',
 ]
 

@@ -16,9 +16,25 @@ scrolling. Below `lg` everything stacks and the page scrolls normally.
 
 | Column | Contents |
 | --- | --- |
-| Left (200px) | Six sponsor slots — three filled, three open at $50/mo |
-| Middle | Stats bar, filter pills, the ranked table |
-| Right (200px) | Top earners, just submitted, this week, submit CTA |
+| Left (200px) | Sponsor slots 1-3 |
+| Middle | Stats bar, top earners strip, the ranked table, footer |
+| Right (200px) | Sponsor slots 4-6, submit CTA |
+
+Both rails are pinned to exactly the viewport height below the header and never
+scroll — three compact cards plus the CTA fit inside, checked down to a 700px
+tall window. The table shows ten rows and pages ten at a time behind a
+"Load more" button.
+
+No slot ships pre-filled. An occupied sponsor card means a real paying
+advertiser, never a placeholder.
+
+### Sponsor rotation
+
+Paid slots cycle through the occupied positions once every 24 hours, so no
+advertiser is stuck at the bottom. The shift is derived from the day number
+rather than stored, so it needs no cron and no writes, and every request on a
+given day agrees on the order. Open slots stay put, so the layout does not jump
+around. `npm run test:rotation` pins the behaviour.
 
 Clicking a table row opens a **drawer** from the right with the full
 description, revenue and its source, a model explainer, and a link out.
@@ -52,7 +68,7 @@ each returning a clear "not configured" message rather than failing silently.
 `sites` — `name, url, description, model_type, revenue_amount,
 revenue_verified, revenue_source_url, trend_percent, launched_at, is_featured`
 
-`ad_slots` — `position (1-6), company_name, company_url, one_liner,
+`ad_slots` — `position (1-6; 1-3 left rail, 4-6 right), company_name, company_url, one_liner,
 stripe_subscription_id, stripe_customer_id, is_active, activated_at,
 cancelled_at`
 
@@ -185,7 +201,9 @@ the scraper has been running long enough to have a history to store.
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
+| `npm test` | Scraper and rotation tests |
 | `npm run test:scraper` | Parser fixture tests |
+| `npm run test:rotation` | Sponsor rotation tests |
 | `npm run scrape` | One-off scrape, same code path as the cron |
 
 ## A note on the numbers

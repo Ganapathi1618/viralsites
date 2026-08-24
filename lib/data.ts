@@ -8,9 +8,10 @@ import type { AdSlot, Site, Stats } from './types'
  * up as a "demo data" badge rather than a 500.
  */
 
-/** Positions 1-6 render in the left rail, 7-9 in the right. */
-export const AD_SLOT_COUNT = 9
-const LEFT_RAIL_SLOTS = 6
+/** Six sponsor slots: three in the left rail, three in the right. */
+export const AD_SLOT_COUNT = 6
+const LEFT_RAIL_SLOTS = 3
+const DAY_MS = 86_400_000
 
 const SITE_COLUMNS =
   'id,name,url,description,model_type,revenue_amount,revenue_verified,revenue_source_url,trend_percent,launched_at,is_featured,created_at'
@@ -53,13 +54,34 @@ export async function getDirectoryData(): Promise<DirectoryData> {
 }
 
 function build(sites: Site[], adSlots: AdSlot[], isLive: boolean): DirectoryData {
+  const rotated = rotateActiveSlots(adSlots)
+
   return {
     sites,
-    leftSlots: adSlots.filter((slot) => slot.position <= LEFT_RAIL_SLOTS),
-    rightSlots: adSlots.filter((slot) => slot.position > LEFT_RAIL_SLOTS),
+    leftSlots: rotated.filter((_, index) => index < LEFT_RAIL_SLOTS),
+    rightSlots: rotated.filter((_, index) => index >= LEFT_RAIL_SLOTS),
     stats: computeStats(sites),
     isLive,
   }
+}
+
+/**
+ * Round-robin so no advertiser is stuck in the worst slot.
+ *
+ * Paid slots cycle through the occupied display positions once every 24 hours;
+ * open slots stay where they are, so the layout does not jump around. The shift
+ * is derived from the day number rather than stored, which means it needs no
+ * cron and no writes, and every request on a given day agrees on the order.
+ */
+export function rotateActiveSlots(slots: AdSlot[], now = Date.now()): AdSlot[] {
+  const active = slots.filter((slot) => slot.is_active)
+  if (active.length < 2) return slots
+
+  const shift = Math.floor(now / DAY_MS) % active.length
+  const order = [...active.slice(shift), ...active.slice(0, shift)]
+
+  let next = 0
+  return slots.map((slot) => (slot.is_active ? order[next++] : slot))
 }
 
 /** Always render every slot, inventing open placeholders for any gaps. */

@@ -99,18 +99,17 @@ create policy "anyone can submit" on public.submissions for insert with check (t
 -- both of which use the service role key and bypass RLS entirely.
 
 -- ------------------------------------------------------------ ad slots -----
--- Positions 1-6 fill the left rail, 7-9 the right rail.
-insert into public.ad_slots (position, company_name, company_url, one_liner, is_active, activated_at)
+-- Six slots, all open. Positions 1-3 render in the left rail, 4-6 in the
+-- right. Nothing is pre-filled: an occupied slot means a real paying
+-- advertiser, never a placeholder.
+insert into public.ad_slots (position, company_name, company_url, one_liner, is_active)
 values
-  (1, 'outbid.lol',   'https://outbid.lol',   'Pay more than the person above you.',  true, now()),
-  (2, 'million.dev',  'https://million.dev',  'A million pixels, a dollar each.',     true, now()),
-  (3, 'theboard.fyi', 'https://theboard.fyi', 'The leaderboard indie hackers watch.', true, now()),
-  (4, null, null, null, false, null),
-  (5, null, null, null, false, null),
-  (6, null, null, null, false, null),
-  (7, 'pixelwall.io', 'https://pixelwall.io', 'Ten thousand pixels, resold quarterly.', true, now()),
-  (8, 'rankme.fyi',   'https://rankme.fyi',   'Climb the rank by paying, or shipping.', true, now()),
-  (9, null, null, null, false, null)
+  (1, null, null, null, false),
+  (2, null, null, null, false),
+  (3, null, null, null, false),
+  (4, null, null, null, false),
+  (5, null, null, null, false),
+  (6, null, null, null, false)
 on conflict (position) do nothing;
 
 -- ---------------------------------------------------------------- seed -----
