@@ -62,14 +62,24 @@ export type Stats = {
   topEarner: { name: string; revenue: number } | null
 }
 
+/** Launch offer: a flat $5 for a five-day run, i.e. $1/day. */
+export const LAUNCH_PRICE_USD = 5
+export const LAUNCH_DAYS = 5
+
+/** What a slot costs once the launch offer closes. */
 export const AD_SLOT_PRICE_USD = 50
-/** Struck-through list price shown beside the launch deal. */
-export const AD_SLOT_LIST_PRICE_USD = 100
 
 /**
- * Hosted Dodo Payments checkout for a sponsor slot. Overridable per
- * deployment, since the link changes if the product is recreated.
+ * When the launch price ends. No timezone suffix, so it resolves to midnight
+ * in the visitor's own timezone — a countdown that hits zero at a moment the
+ * reader recognises beats one that expires at an arbitrary local hour.
+ */
+export const LAUNCH_ENDS_AT = '2026-08-30T00:00:00'
+
+/**
+ * Hosted Dodo Payments checkout. Overridable per deployment, since the link
+ * changes if the product is recreated.
  */
 export const DODO_CHECKOUT_URL =
-  process.env.NEXT_PUBLIC_DODO_CHECKOUT_URL || 'https://dodo.pe/lq17vpnfe59'
+  process.env.NEXT_PUBLIC_DODO_CHECKOUT_URL || 'https://dodo.pe/ba68w4xy495'
 export const ONE_LINER_MAX = 60

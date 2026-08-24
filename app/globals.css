@@ -46,6 +46,32 @@ body {
   background: #cfcfcf;
 }
 
+/* Announcement ticker. The track holds two identical runs of the message list
+   and slides by exactly half its width, so the loop has no visible seam. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee {
+  width: max-content;
+  animation: marquee 45s linear infinite;
+}
+
+.marquee:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee {
+    animation: none;
+  }
+}
+
 @layer components {
   .label {
     @apply text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted;

@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Footer from './Footer'
 import Header from './Header'
 import LeftSidebar from './LeftSidebar'
 import Modal from './Modal'
 import RightSidebar from './RightSidebar'
 import SubmitForm from './SubmitForm'
+import Ticker from './Ticker'
 import type { AdSlot, Stats } from '@/lib/types'
 
 /**
@@ -28,6 +29,14 @@ export default function PageShell({
   children: React.ReactNode
 }) {
   const [submitOpen, setSubmitOpen] = useState(false)
+  // The ticker is fixed, so everything below it has to shift by its height.
+  // One CSS variable drives the header offset, the content padding and the
+  // rails' viewport-height maths, so they can never disagree.
+  const [bannerHeight, setBannerHeight] = useState('2.25rem')
+
+  // Stable identity so the ticker's mount effect does not re-run on every
+  // render of this component.
+  const hideBanner = useCallback(() => setBannerHeight('0px'), [])
 
   // Dodo and Stripe both send buyers back with a ?checkout= flag.
   const [checkoutState, setCheckoutState] = useState<string | null>(null)
@@ -40,12 +49,14 @@ export default function PageShell({
   }, [])
 
   return (
-    <>
+    <div style={{ '--banner-h': bannerHeight } as React.CSSProperties}>
+      <Ticker sitesTracked={stats.sitesTracked} onDismiss={hideBanner} />
+
       <Header stats={stats} onSubmit={() => setSubmitOpen(true)} />
 
       {checkoutState ? (
         <div
-          className={`fixed left-1/2 top-16 z-[80] -translate-x-1/2 animate-pop-in rounded-lg border px-4 py-2.5 text-[12.5px] shadow-sm ${
+          className={`fixed left-1/2 top-[calc(4rem+var(--banner-h,0px))] z-[80] -translate-x-1/2 animate-pop-in rounded-lg border px-4 py-2.5 text-[12.5px] shadow-sm ${
             checkoutState === 'success'
               ? 'border-money/25 bg-money/[0.08] text-money'
               : 'border-line bg-page text-body'
@@ -65,9 +76,9 @@ export default function PageShell({
         </div>
       ) : null}
 
-      <div className="mx-auto max-w-shell px-4 pt-14 lg:h-screen">
+      <div className="mx-auto max-w-shell px-4 pt-[calc(3.5rem+var(--banner-h,0px))] lg:h-screen">
         <div className="lg:flex lg:h-full lg:gap-6">
-          <aside className="hidden shrink-0 lg:block lg:h-[calc(100vh-3.5rem)] lg:w-[200px] lg:overflow-hidden lg:py-4">
+          <aside className="hidden shrink-0 lg:block lg:h-[calc(100vh-3.5rem-var(--banner-h,0px))] lg:w-[200px] lg:overflow-hidden lg:py-4">
             <LeftSidebar slots={leftSlots} />
           </aside>
 
@@ -83,7 +94,7 @@ export default function PageShell({
             <Footer onSubmit={() => setSubmitOpen(true)} />
           </main>
 
-          <aside className="hidden shrink-0 lg:block lg:h-[calc(100vh-3.5rem)] lg:w-[200px] lg:overflow-hidden lg:py-4">
+          <aside className="hidden shrink-0 lg:block lg:h-[calc(100vh-3.5rem-var(--banner-h,0px))] lg:w-[200px] lg:overflow-hidden lg:py-4">
             <RightSidebar slots={rightSlots} onSubmit={() => setSubmitOpen(true)} />
           </aside>
         </div>
@@ -97,6 +108,6 @@ export default function PageShell({
       >
         <SubmitForm onDone={() => setSubmitOpen(false)} />
       </Modal>
-    </>
+    </div>
   )
 }

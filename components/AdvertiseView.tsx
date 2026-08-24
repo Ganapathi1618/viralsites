@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import Countdown from './Countdown'
 import {
-  AD_SLOT_LIST_PRICE_USD,
   AD_SLOT_PRICE_USD,
   DODO_CHECKOUT_URL,
+  LAUNCH_DAYS,
+  LAUNCH_PRICE_USD,
   ONE_LINER_MAX,
   type AdSlot,
 } from '@/lib/types'
@@ -70,33 +72,35 @@ export default function AdvertiseView({ slots }: { slots: AdSlot[] }) {
     <div className="max-w-[520px]">
       <h1 className="text-[22px] font-bold tracking-tight text-ink">Grab a spot</h1>
       <p className="mt-1 text-[13px] text-muted">
-        Fill in your details. Dodo Payments starts a monthly subscription from there.
+        Fill in your details. Dodo Payments takes it from there.
       </p>
 
-      <div className="mt-5 rounded-lg border border-brand/25 bg-brand/[0.03] p-4">
-        <span className="inline-flex items-center rounded bg-brand px-1.5 py-[3px] font-mono text-[10px] font-semibold uppercase tracking-wider text-white">
-          Launch deal
+      <div className="mt-5 rounded-xl border border-down/25 bg-down/[0.03] p-5">
+        <span className="inline-flex items-center rounded bg-down px-1.5 py-[3px] font-mono text-[10px] font-semibold uppercase tracking-wider text-white">
+          Launch offer
         </span>
 
-        <p className="mt-2.5 flex flex-wrap items-baseline gap-2">
-          <span className="num text-[22px] font-bold text-ink">
-            ${AD_SLOT_PRICE_USD} for a month
+        <p className="mt-3 flex flex-wrap items-baseline gap-2.5">
+          <span className="num text-[42px] font-bold leading-none text-ink">
+            ${LAUNCH_PRICE_USD}
           </span>
-          <span className="num text-[13px] text-muted line-through">
-            ${AD_SLOT_LIST_PRICE_USD} for a month
-          </span>
+          <span className="num text-[15px] text-muted line-through">${AD_SLOT_PRICE_USD}/month</span>
         </p>
 
-        <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">
-          Limited-time price. After promo ends, next spot jumps to ${AD_SLOT_LIST_PRICE_USD}/month.
+        <p className="mt-2 text-[12.5px] leading-relaxed text-body">
+          Just $1/day for {LAUNCH_DAYS} days. Price increases August 30.
         </p>
+
+        <div className="mt-4 border-t border-down/15 pt-4">
+          <Countdown />
+        </div>
 
         {open > 0 ? (
-          <p className="num mt-2 text-[11.5px] text-body">
+          <p className="num mt-4 text-[11.5px] text-body">
             {open} of {slots.length} spots open right now.
           </p>
         ) : (
-          <p className="mt-2 text-[11.5px] text-body">
+          <p className="mt-4 text-[11.5px] text-body">
             Every spot is taken. Leave your details and we&apos;ll email you when one frees up.
           </p>
         )}
@@ -171,7 +175,8 @@ export default function AdvertiseView({ slots }: { slots: AdSlot[] }) {
             className="field"
           />
           <p className="mt-1 text-[11px] text-muted">
-            Dodo sends the receipt here and bills each month.
+            Dodo sends the receipt here. This is a one-off payment for{' '}
+            {LAUNCH_DAYS} days, not a subscription.
           </p>
         </div>
 
@@ -181,12 +186,12 @@ export default function AdvertiseView({ slots }: { slots: AdSlot[] }) {
           </p>
         ) : null}
 
-        <button type="submit" disabled={busy} className="btn-primary w-full !py-2.5">
+        <button type="submit" disabled={busy} className="btn-primary w-full !py-3 !text-[14px]">
           {status.kind === 'saving'
             ? 'Saving…'
             : status.kind === 'redirecting'
               ? 'Opening Dodo…'
-              : `Subscribe · $${AD_SLOT_PRICE_USD} for a month`}
+              : `Reserve for $${LAUNCH_PRICE_USD} →`}
         </button>
 
         <p className="text-center text-[11px] text-muted">

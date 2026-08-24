@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { hostname } from '@/lib/format'
-import { AD_SLOT_PRICE_USD, type AdSlot } from '@/lib/types'
+import { AD_SLOT_PRICE_USD, LAUNCH_DAYS, LAUNCH_PRICE_USD, type AdSlot } from '@/lib/types'
 import { Favicon } from './ui'
 
 /** One sponsor card. Both rails render the same component. */
@@ -34,9 +34,12 @@ function OpenSlot() {
       href="/advertise"
       className="block w-full rounded-lg border border-dashed border-line p-2.5 text-left transition hover:border-brand/40 hover:bg-brand/[0.03]"
     >
-      <p className="num text-[13px] font-bold text-ink">${AD_SLOT_PRICE_USD}/mo</p>
-      <p className="mt-0.5 text-[11.5px] font-medium text-brand">Grab this spot</p>
-      <p className="mt-0.5 text-[10.5px] text-muted">Monthly · cancel anytime</p>
+      <p className="num text-[13px] font-bold text-ink">
+        🚀 ${LAUNCH_PRICE_USD} for {LAUNCH_DAYS} days
+      </p>
+      <p className="mt-0.5 text-[10.5px] leading-snug text-muted">
+        Just $1/day · Goes to ${AD_SLOT_PRICE_USD}/mo Aug 30
+      </p>
     </Link>
   )
 }

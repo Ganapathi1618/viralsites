@@ -126,11 +126,36 @@ revenue_source_url, launched_at, submitter_email, status`
 ## Advertising, and Dodo Payments
 
 Every "Advertise" link and every open sponsor card goes to **`/advertise`**.
-The page shows the launch deal ($50 for a month, list price $100), takes the
-buyer's site URL, name, one-liner and email, writes an `advertise_requests`
-row, and only then sends the browser to the hosted Dodo checkout in the same
-tab. Saving first means a started checkout is always recorded, even if the
-buyer abandons the payment.
+The page shows the launch offer — **$5 for 5 days** against a struck-through
+$50/month, with a live countdown to `LAUNCH_ENDS_AT` — takes the buyer's site
+URL, name, one-liner and email, writes an `advertise_requests` row, and only
+then sends the browser to the hosted Dodo checkout in the same tab. Saving
+first means a started checkout is always recorded, even if the buyer abandons
+the payment.
+
+The launch price is a **one-off payment for five days, not a subscription**.
+When it ends, change `LAUNCH_PRICE_USD` / `LAUNCH_DAYS` in `lib/types.ts` and
+point `NEXT_PUBLIC_DODO_CHECKOUT_URL` at the $50/month product. The countdown
+switches itself to "the launch price has ended" once the date passes, so a
+missed deadline degrades quietly rather than advertising a stale offer.
+
+### The announcement ticker
+
+`components/Ticker.tsx` scrolls above the header. The message list is
+duplicated and the track slides by exactly half its width, which is what makes
+the loop seamless; it pauses on hover and stops entirely under
+`prefers-reduced-motion`. Dismissal is remembered in `sessionStorage`, so it
+returns on the visitor's next visit but not on their next page view.
+
+The ticker is `fixed`, so its height drives a `--banner-h` CSS variable on the
+shell. The header offset, the content padding and the sidebars' viewport-height
+maths all read that one variable, so they cannot drift apart when it is
+dismissed.
+
+Its "N viral sites tracked" line comes from the real count rather than a
+hardcoded number, and disappears entirely at zero — a hardcoded "100+" would
+contradict the header's live figure sitting two inches below it, and a failed
+database read would otherwise scroll "0 viral sites tracked" across the page.
 
 Set `NEXT_PUBLIC_DODO_CHECKOUT_URL` when the Dodo product is recreated; it
 falls back to the current link.
