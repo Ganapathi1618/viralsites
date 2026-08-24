@@ -4,7 +4,6 @@ import { getStripe } from '@/lib/stripe'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
-// The raw body is required for signature verification.
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
@@ -20,19 +19,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing stripe-signature header.' }, { status: 400 })
   }
 
+  // The raw body is required for signature verification.
   const payload = await request.text()
 
   let event: Stripe.Event
   try {
     event = stripe.webhooks.constructEvent(payload, signature, secret)
   } catch (error) {
-    console.error('[stripe] signature verification failed:', (error as Error).message)
+    console.error('[stripe] bad signature:', (error as Error).message)
     return NextResponse.json({ error: 'Invalid signature.' }, { status: 400 })
   }
 
   const supabase = getSupabaseAdmin()
   if (!supabase) {
-    console.error('[stripe] SUPABASE_SERVICE_ROLE_KEY missing; cannot record', event.type)
+    console.error('[stripe] service role key missing; cannot record', event.type)
     return NextResponse.json({ error: 'Database not configured.' }, { status: 503 })
   }
 
@@ -46,33 +46,31 @@ export async function POST(request: Request) {
         await supabase
           .from('ad_slots')
           .update({
-            is_filled: true,
-            stripe_subscription_id:
-              typeof session.subscription === 'string'
-                ? session.subscription
-                : (session.subscription?.id ?? null),
-            stripe_customer_id:
-              typeof session.customer === 'string' ? session.customer : (session.customer?.id ?? null),
-            company_name: session.customer_details?.name ?? 'Reserved',
-            description: 'Slot reserved — copy pending.',
-            filled_at: new Date().toISOString(),
+            is_active: true,
+            company_name: session.metadata?.company_name ?? 'Reserved',
+            company_url: session.metadata?.company_url ?? null,
+            one_liner: session.metadata?.one_liner ?? null,
+            stripe_subscription_id: idOf(session.subscription),
+            stripe_customer_id: idOf(session.customer),
+            activated_at: new Date().toISOString(),
+            cancelled_at: null,
           })
           .eq('position', position)
         break
       }
 
-      // Subscription ended or lapsed: put the slot back on the market.
+      // Subscription ended: put the slot back on the market but keep the
+      // Stripe ids for the record.
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
-        await releaseSlot(subscription.id)
+        await release(subscription.id)
         break
       }
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
-        const subscriptionId =
-          typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id
-        if (subscriptionId) await releaseSlot(subscriptionId)
+        const id = idOf(invoice.subscription)
+        if (id) await release(id)
         break
       }
 
@@ -87,17 +85,21 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ received: true })
 
-  async function releaseSlot(subscriptionId: string) {
+  async function release(subscriptionId: string) {
     await supabase!
       .from('ad_slots')
       .update({
-        is_filled: false,
+        is_active: false,
         company_name: null,
-        url: null,
-        description: null,
-        stripe_subscription_id: null,
-        filled_at: null,
+        company_url: null,
+        one_liner: null,
+        cancelled_at: new Date().toISOString(),
       })
       .eq('stripe_subscription_id', subscriptionId)
   }
+}
+
+function idOf(value: string | { id: string } | null | undefined): string | null {
+  if (!value) return null
+  return typeof value === 'string' ? value : value.id
 }

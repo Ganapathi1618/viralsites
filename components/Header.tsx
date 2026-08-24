@@ -1,42 +1,44 @@
-import Link from 'next/link'
+'use client'
 
-const NAV = [
-  { href: '/', label: 'Directory' },
-  { href: '/submit', label: 'Submit' },
-  { href: '/advertise', label: 'Advertise' },
-]
+import { formatMoney } from '@/lib/format'
+import type { Stats } from '@/lib/types'
 
-export default function Header() {
+export default function Header({
+  stats,
+  onSubmit,
+  onAdvertise,
+}: {
+  stats: Stats
+  onSubmit: () => void
+  onAdvertise: () => void
+}) {
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-ink/85 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6">
-        <Link href="/" className="group flex items-baseline gap-1.5">
-          <span className="text-[15px] font-bold tracking-tight">
-            Viral<span className="text-accent">Sites</span>
-          </span>
-          <span className="font-mono text-[11px] text-muted transition group-hover:text-accent">
-            .fyi
-          </span>
-        </Link>
+    <header className="fixed inset-x-0 top-0 z-50 h-14 border-b border-line bg-page/95 backdrop-blur">
+      <div className="mx-auto flex h-full max-w-shell items-center justify-between gap-4 px-4">
+        <a href="/" className="text-[15px] font-bold tracking-tight">
+          <span className="text-ink">Viral</span>
+          <span className="text-brand">Sites</span>
+          <span className="font-normal text-muted">.fyi</span>
+        </a>
 
-        <nav className="flex items-center gap-1">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="hidden rounded-md px-3 py-1.5 text-[13px] text-muted transition hover:bg-raised hover:text-white sm:block"
-            >
-              {item.label}
-            </Link>
-          ))}
-          <Link
-            href="/submit"
-            className="ml-1 rounded-md bg-accent px-3 py-1.5 text-[13px] font-semibold text-ink transition hover:bg-accent-dim"
-          >
-            <span className="sm:hidden">Submit</span>
+        <div className="hidden items-center gap-2 rounded-full border border-line bg-subtle px-3 py-1 md:flex">
+          <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-money" />
+          <span className="num text-[12px] text-body">
+            {stats.sitesTracked} sites live
+            <span className="mx-1.5 text-muted">·</span>
+            <span className="font-semibold text-money">{formatMoney(stats.totalEarned)}</span> earned
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={onAdvertise} className="btn-ghost">
+            Advertise
+          </button>
+          <button type="button" onClick={onSubmit} className="btn-primary">
             <span className="hidden sm:inline">Submit a site</span>
-          </Link>
-        </nav>
+            <span className="sm:hidden">Submit</span>
+          </button>
+        </div>
       </div>
     </header>
   )

@@ -1,42 +1,67 @@
-import Link from 'next/link'
-import { MODEL_TYPES, type ModelType } from '@/lib/types'
+'use client'
 
-const LABELS: Record<ModelType | 'all', string> = {
-  all: 'All',
-  bid: 'Bid',
-  pixel: 'Pixel',
-  leaderboard: 'Leaderboard',
-  sponsor: 'Sponsor',
+import type { Site } from '@/lib/types'
+
+export const FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'bid', label: 'Live Bidding' },
+  { id: 'leaderboard', label: 'Leaderboard' },
+  { id: 'pixel', label: 'Pixel Sales' },
+  { id: 'sponsor', label: 'Sponsorship' },
+  { id: 'trending', label: '🔥 Trending' },
+  { id: 'new', label: '🆕 New this week' },
+] as const
+
+export type FilterId = (typeof FILTERS)[number]['id']
+
+const WEEK_MS = 7 * 86_400_000
+
+/** Trending is a trend above 25%; new is added in the last seven days. */
+export function applyFilter(sites: Site[], filter: FilterId): Site[] {
+  switch (filter) {
+    case 'all':
+      return sites
+    case 'trending':
+      return sites.filter((site) => (site.trend_percent ?? 0) >= 25)
+    case 'new':
+      return sites.filter((site) => Date.now() - Date.parse(site.created_at) <= WEEK_MS)
+    default:
+      return sites.filter((site) => site.model_type === filter)
+  }
 }
 
 export default function FilterTabs({
   active,
-  counts,
+  onChange,
+  sites,
 }: {
-  active: ModelType | 'all'
-  counts: Record<ModelType | 'all', number>
+  active: FilterId
+  onChange: (id: FilterId) => void
+  sites: Site[]
 }) {
-  const options: (ModelType | 'all')[] = ['all', ...MODEL_TYPES]
-
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {options.map((option) => {
-        const isActive = option === active
+      {FILTERS.map((filter) => {
+        const count = applyFilter(sites, filter.id).length
+        const isActive = filter.id === active
+
         return (
-          <Link
-            key={option}
-            href={option === 'all' ? '/' : `/?model=${option}`}
-            scroll={false}
-            aria-current={isActive ? 'page' : undefined}
-            className={`rounded-md border px-3 py-1.5 text-[12px] transition ${
+          <button
+            key={filter.id}
+            type="button"
+            onClick={() => onChange(filter.id)}
+            aria-pressed={isActive}
+            className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition ${
               isActive
-                ? 'border-accent/50 bg-accent/10 text-accent'
-                : 'border-line bg-surface text-muted hover:border-line hover:text-white'
+                ? 'border-brand bg-brand text-white'
+                : 'border-line bg-page text-body hover:border-[#dcdcdc] hover:text-ink'
             }`}
           >
-            {LABELS[option]}
-            <span className="num ml-1.5 text-[11px] opacity-60">{counts[option]}</span>
-          </Link>
+            {filter.label}
+            <span className={`num ml-1.5 text-[11px] ${isActive ? 'text-white/70' : 'text-muted'}`}>
+              {count}
+            </span>
+          </button>
         )
       })}
     </div>

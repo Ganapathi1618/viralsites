@@ -3,18 +3,17 @@
  *
  *   npx tsx scripts/scrape.ts
  *
- * Reads .env.local for Supabase credentials; without them it parses the source
- * and prints what it found instead of writing.
+ * Without Supabase credentials it parses the sources and prints what it found
+ * instead of writing anything.
  */
-import { syncFromSource } from '../lib/scraper/sync'
+import { syncFromSources } from '../lib/scraper/sync'
 
-async function main() {
-  const result = await syncFromSource()
-  console.log(JSON.stringify(result, null, 2))
-  if (!result.ok) process.exitCode = 1
-}
-
-main().catch((error) => {
-  console.error(error)
-  process.exit(1)
-})
+syncFromSources()
+  .then((result) => {
+    console.log(JSON.stringify(result, null, 2))
+    if (!result.ok) process.exitCode = 1
+  })
+  .catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })

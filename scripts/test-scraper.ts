@@ -8,7 +8,7 @@
  * targets. If a real page stops matching all three, the cron route reports
  * `scraped: 0` rather than failing silently.
  */
-import { guessModelType, parseAmount, parseListings } from '../lib/scraper/outbid'
+import { guessModelType, parseAmount, parseListings } from '../lib/scraper/parse'
 
 let failures = 0
 
@@ -77,7 +77,7 @@ check('expands 2.1k', fromAnchors.some((l) => l.revenue === 2100), fromAnchors)
 
 // --- Degradation ------------------------------------------------------------
 console.log('unparseable input')
-check('returns nothing rather than junk', parseListings('<html><body>hi</body></html>').length === 0)
+check('returns nothing rather than junk', parseListings('<html><body>hi</body></html>', 'https://outbid.lol').length === 0)
 
 // --- Units ------------------------------------------------------------------
 console.log('helpers')

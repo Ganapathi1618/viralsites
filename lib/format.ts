@@ -1,34 +1,27 @@
-/** Formatting helpers. Every number in the UI goes through one of these. */
-
 export function formatMoney(value: number): string {
   return `$${Math.round(value).toLocaleString('en-US')}`
 }
 
-/** $184,320 -> $184.3K, $1,240,000 -> $1.24M. Used where space is tight. */
-export function formatCompactMoney(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
-  if (value >= 10_000) return `$${(value / 1_000).toFixed(1)}K`
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`
+/** Compact form for tight columns: $230,000 -> $230K, $1,240,000 -> $1.24M. */
+export function formatCompact(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2).replace(/\.?0+$/, '')}M`
+  if (value >= 1_000) return `$${Math.round(value / 1_000)}K`
   return `$${Math.round(value)}`
 }
 
-export function formatDate(value: string | null): string {
+export function formatMonthYear(value: string | null): string {
   if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
+  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
 
-export function formatRelative(value: string): string {
-  const then = new Date(value).getTime()
+export function formatAgo(value: string): string {
+  const then = Date.parse(value)
   if (Number.isNaN(then)) return '—'
   const minutes = Math.max(0, Math.round((Date.now() - then) / 60_000))
-  if (minutes < 60) return `${minutes}m ago`
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes} min ago`
   const hours = Math.round(minutes / 60)
   if (hours < 24) return `${hours}h ago`
   const days = Math.round(hours / 24)
@@ -45,17 +38,23 @@ export function hostname(url: string): string {
   }
 }
 
-/**
- * Percentage change between the last two revenue readings. `null` when there is
- * no prior reading to compare against, so the UI can show "new" instead of 0%.
- */
-export function trendPercent(revenue: number, prev: number | null): number | null {
-  if (prev === null || prev === undefined || prev <= 0) return null
-  return ((revenue - prev) / prev) * 100
+/** Deterministic avatar colour so a site keeps the same badge across renders. */
+const AVATAR_COLORS = [
+  '#0066ff', '#7c3aed', '#ea580c', '#16a34a',
+  '#db2777', '#0891b2', '#ca8a04', '#4f46e5',
+]
+
+export function avatarColor(seed: string): string {
+  let hash = 0
+  for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
+
+export function initial(name: string): string {
+  return (name.trim()[0] ?? '?').toUpperCase()
 }
 
 export function formatTrend(percent: number | null): string {
-  if (percent === null) return 'new'
-  const sign = percent > 0 ? '+' : ''
-  return `${sign}${percent.toFixed(1)}%`
+  if (percent === null || percent === undefined) return '—'
+  return `${percent > 0 ? '+' : ''}${percent.toFixed(1)}%`
 }

@@ -1,10 +1,10 @@
 import type { ModelType } from '../types'
 
 /**
- * Scraper for outbid.lol.
+ * Parser for the scraper's sources (outbid.lol and outbid.fyi).
  *
- * outbid.lol ships no public API and its markup is not versioned, so parsing
- * runs through three strategies in order of reliability:
+ * Neither ships a public API and neither versions its markup, so parsing runs
+ * through three strategies in order of reliability:
  *
  *   1. Next.js data payloads (`__NEXT_DATA__`, then the streamed `self.__next_f`
  *      chunks) — structured JSON, survives cosmetic markup changes.
@@ -28,11 +28,14 @@ export type ScrapedSite = {
 const USER_AGENT =
   'ViralSitesBot/1.0 (+https://viralsites.fyi; directory of one-page money sites)'
 
-export function sourceUrl(): string {
-  return process.env.SCRAPER_SOURCE_URL || 'https://outbid.lol'
+/** Sources scraped on each run, in order. */
+export function sourceUrls(): string[] {
+  const configured = process.env.SCRAPER_SOURCE_URLS
+  if (configured) return configured.split(',').map((url) => url.trim()).filter(Boolean)
+  return ['https://outbid.lol', 'https://outbid.fyi']
 }
 
-export async function fetchSource(url = sourceUrl()): Promise<string> {
+export async function fetchSource(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: { 'user-agent': USER_AGENT, accept: 'text/html,application/xhtml+xml' },
     cache: 'no-store',
@@ -46,7 +49,7 @@ export async function fetchSource(url = sourceUrl()): Promise<string> {
   return response.text()
 }
 
-export function parseListings(html: string, source = sourceUrl()): ScrapedSite[] {
+export function parseListings(html: string, source: string): ScrapedSite[] {
   const strategies = [parseNextData, parseJsonLd, parseAnchors]
 
   for (const strategy of strategies) {

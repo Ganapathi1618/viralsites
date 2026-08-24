@@ -1,100 +1,105 @@
-import ModelBadge from './ModelBadge'
-import { formatCompactMoney, formatRelative, hostname } from '@/lib/format'
-import type { Site, Submission } from '@/lib/types'
+'use client'
 
-const MEDALS = ['text-accent', 'text-white', 'text-amber-300']
+import { avatarColor, formatAgo, formatCompact, formatMoney, hostname } from '@/lib/format'
+import type { Site, Submission, WeekStats } from '@/lib/types'
 
 function TopEarners({ sites }: { sites: Site[] }) {
   return (
-    <div className="panel p-3">
-      <h2 className="label mb-3">Top earners</h2>
-
-      <ol className="space-y-1">
+    <section>
+      <h2 className="label mb-2">Top earners</h2>
+      <ol className="space-y-px">
         {sites.map((site, index) => (
           <li key={site.id}>
             <a
               href={site.url}
               target="_blank"
               rel="noopener noreferrer nofollow"
-              className="group flex items-center gap-2.5 rounded-md px-2 py-2 transition hover:bg-raised"
+              className="group flex items-center gap-2 rounded-md px-1.5 py-1.5 transition hover:bg-subtle"
             >
-              <span
-                className={`num w-4 text-[12px] font-semibold ${
-                  MEDALS[index] ?? 'text-muted'
-                }`}
-              >
-                {index + 1}
-              </span>
+              <span className="num w-3 shrink-0 text-[11px] font-semibold text-muted">{index + 1}</span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] text-white transition group-hover:text-accent">
+                <span className="block truncate text-[12px] font-medium text-ink group-hover:text-brand">
                   {site.name}
                 </span>
-                <span className="num block truncate text-[10.5px] text-muted/70">
-                  {hostname(site.url)}
-                </span>
+                <span className="num block truncate text-[10px] text-muted">{hostname(site.url)}</span>
               </span>
-              <span className="num text-[12.5px] font-semibold text-accent">
-                {formatCompactMoney(site.revenue)}
+              <span className="num shrink-0 text-[11.5px] font-semibold text-money">
+                {formatCompact(site.revenue_amount)}
               </span>
             </a>
           </li>
         ))}
       </ol>
-    </div>
+    </section>
   )
 }
 
-function RecentlySubmitted({ submissions }: { submissions: Submission[] }) {
+function JustSubmitted({ submissions }: { submissions: Submission[] }) {
   return (
-    <div className="panel p-3">
-      <h2 className="label mb-3">Recently submitted</h2>
-
+    <section>
+      <h2 className="label mb-2">Just submitted</h2>
       {submissions.length === 0 ? (
-        <p className="px-2 py-3 text-[12.5px] text-muted">Nothing submitted yet.</p>
+        <p className="px-1.5 text-[11.5px] text-muted">Nothing yet today.</p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="space-y-px">
           {submissions.map((submission) => (
-            <li key={submission.id}>
-              <a
-                href={submission.url}
-                target="_blank"
-                rel="noopener noreferrer nofollow"
-                className="group block rounded-md px-2 py-2 transition hover:bg-raised"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[13px] text-white transition group-hover:text-accent">
-                    {submission.name}
-                  </span>
-                  <ModelBadge model={submission.model_type} />
-                </div>
-                <div className="mt-1 flex items-center justify-between gap-2">
-                  <span className="num text-[11px] text-muted">
-                    {formatRelative(submission.submitted_at)}
-                  </span>
-                  <span className="num text-[11.5px] text-muted">
-                    {formatCompactMoney(submission.revenue)}
-                  </span>
-                </div>
-              </a>
+            <li key={submission.id} className="flex items-center gap-2 rounded-md px-1.5 py-1.5">
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ background: avatarColor(submission.name) }}
+              />
+              <span className="min-w-0 flex-1 truncate text-[12px] text-ink">{submission.name}</span>
+              <span className="num shrink-0 text-[10px] text-muted">{formatAgo(submission.created_at)}</span>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </section>
+  )
+}
+
+function ThisWeek({ week }: { week: WeekStats }) {
+  const rows: [string, string][] = [
+    ['New sites', String(week.newSites)],
+    ['Earned', formatMoney(week.earnedThisWeek)],
+    ['Went viral', String(week.wentViral)],
+  ]
+
+  return (
+    <section>
+      <h2 className="label mb-2">This week</h2>
+      <dl className="space-y-1.5 rounded-lg border border-line bg-subtle px-2.5 py-2.5">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-baseline justify-between gap-2">
+            <dt className="text-[11.5px] text-body">{label}</dt>
+            <dd className="num text-[12px] font-semibold text-ink">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   )
 }
 
 export default function RightSidebar({
   topEarners,
   submissions,
+  week,
+  onSubmit,
 }: {
   topEarners: Site[]
   submissions: Submission[]
+  week: WeekStats
+  onSubmit: () => void
 }) {
   return (
-    <aside className="space-y-3">
+    <div className="flex h-full flex-col gap-5">
       <TopEarners sites={topEarners} />
-      <RecentlySubmitted submissions={submissions} />
-    </aside>
+      <JustSubmitted submissions={submissions} />
+      <ThisWeek week={week} />
+
+      <button type="button" onClick={onSubmit} className="btn-primary mt-auto w-full !py-2.5">
+        Submit your site free →
+      </button>
+    </div>
   )
 }

@@ -1,53 +1,35 @@
-import { formatCompactMoney } from '@/lib/format'
+import { formatAgo, formatMoney } from '@/lib/format'
 import type { Stats } from '@/lib/types'
 
-function Stat({
-  label,
-  value,
-  sub,
-}: {
-  label: string
-  value: string
-  sub?: string
-}) {
+function Cell({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="flex-1 px-4 py-3.5 sm:px-5">
+    <div className="min-w-0 px-4 py-3">
       <p className="label">{label}</p>
-      <p className="num mt-1 text-xl font-semibold text-white sm:text-2xl">{value}</p>
+      <p className="num mt-1 truncate text-[17px] font-semibold text-ink">{value}</p>
       {sub ? <p className="mt-0.5 truncate text-[11px] text-muted">{sub}</p> : null}
     </div>
   )
 }
 
 export default function StatsBar({ stats, isLive }: { stats: Stats; isLive: boolean }) {
-  const fastest = stats.fastestTo10k
-
   return (
-    <section className="panel divide-y divide-line sm:flex sm:divide-x sm:divide-y-0">
-      <div className="flex items-center gap-2 px-4 py-3.5 sm:px-5">
-        <span
-          className={`h-1.5 w-1.5 rounded-full ${
-            isLive ? 'animate-pulse-dot bg-accent' : 'bg-muted'
-          }`}
-        />
-        <span className="label">{isLive ? 'live' : 'demo data'}</span>
-      </div>
-
-      <Stat
+    <div className="grid grid-cols-2 divide-x divide-y divide-line overflow-hidden rounded-lg border border-line bg-subtle sm:grid-cols-4 sm:divide-y-0">
+      <Cell
         label="Total earned"
-        value={formatCompactMoney(stats.totalRevenue)}
-        sub="across every listed site"
+        value={formatMoney(stats.totalEarned)}
+        sub={isLive ? 'across every listed site' : 'demo data — connect Supabase'}
       />
-      <Stat
-        label="Sites tracked"
-        value={String(stats.totalSites)}
-        sub="one page, one revenue model"
+      <Cell label="Sites tracked" value={String(stats.sitesTracked)} sub="one page, one revenue model" />
+      <Cell
+        label="Newest site"
+        value={stats.newest?.name ?? '—'}
+        sub={stats.newest ? `added ${formatAgo(stats.newest.created_at)}` : undefined}
       />
-      <Stat
-        label="Fastest to $10K"
-        value={fastest ? `${fastest.days}d` : '—'}
-        sub={fastest ? fastest.name : 'no site has crossed $10K yet'}
+      <Cell
+        label="Top earner this week"
+        value={stats.topThisWeek?.name ?? '—'}
+        sub={stats.topThisWeek ? `+${formatMoney(stats.topThisWeek.gain)} implied` : undefined}
       />
-    </section>
+    </div>
   )
 }
