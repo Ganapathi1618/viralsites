@@ -46,10 +46,18 @@ export default function BidModal({
           bidder_email: email,
         }),
       })
-      const payload = (await response.json()) as { url?: string; error?: string; dynamic?: boolean }
+      const payload = (await response.json()) as {
+        url?: string
+        error?: string
+        detail?: string
+      }
 
       if (!response.ok || !payload.url) {
-        setError(payload.error ?? 'Could not start checkout. Try again.')
+        // The detail names the provider's own error, which is the difference
+        // between "try again" and knowing what to fix.
+        setError(
+          [payload.error ?? 'Could not start checkout.', payload.detail].filter(Boolean).join(' '),
+        )
         setStatus('idle')
         return
       }

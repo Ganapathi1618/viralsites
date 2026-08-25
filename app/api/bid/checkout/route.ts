@@ -151,18 +151,28 @@ export async function POST(request: Request) {
     const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null
 
     if (!response.ok) {
-      console.error('[bid/checkout] dodo responded', response.status, JSON.stringify(payload))
+      const detail = JSON.stringify(payload).slice(0, 300)
+      console.error('[bid/checkout] dodo responded', response.status, detail)
       return NextResponse.json(
-        { error: 'Could not open checkout for that amount. Try again.' },
+        {
+          error: 'Could not open checkout for that amount. Try again.',
+          // Carried through so a failure can be diagnosed from the browser
+          // rather than only from the deployment's logs.
+          detail: `dodo ${response.status}: ${detail}`,
+        },
         { status: 502 },
       )
     }
 
     const checkoutUrl = firstUrl(payload)
     if (!checkoutUrl) {
-      console.error('[bid/checkout] no checkout url in response:', JSON.stringify(payload))
+      const detail = JSON.stringify(payload).slice(0, 300)
+      console.error('[bid/checkout] no checkout url in response:', detail)
       return NextResponse.json(
-        { error: 'Could not open checkout for that amount. Try again.' },
+        {
+          error: 'Could not open checkout for that amount. Try again.',
+          detail: `dodo 200 but no url: ${detail}`,
+        },
         { status: 502 },
       )
     }
@@ -171,7 +181,10 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[bid/checkout] request failed:', (error as Error).message)
     return NextResponse.json(
-      { error: 'Could not reach the payment provider. Try again.' },
+      {
+        error: 'Could not reach the payment provider. Try again.',
+        detail: `request failed: ${(error as Error).message}`,
+      },
       { status: 502 },
     )
   }

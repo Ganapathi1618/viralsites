@@ -43,7 +43,12 @@ export async function GET() {
 
   if (live === null && total === null) {
     const why = liveResult.status === 'rejected' ? (liveResult.reason as Error).message : 'unknown'
-    return NextResponse.json({ ...empty, reason: `datafast requests failed: ${why}` })
+    const also = totalResult.status === 'rejected' ? (totalResult.reason as Error).message : ''
+    return NextResponse.json({
+      ...empty,
+      reason: `datafast requests failed: ${why}${also ? ` | ${also}` : ''}`,
+      hint: 'GET /api/diagnostics?key=$CRON_SECRET to see which endpoints answer',
+    })
   }
 
   return NextResponse.json(
