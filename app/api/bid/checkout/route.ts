@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { getSupabase } from '@/lib/supabase/client'
 import { siteUrl } from '@/lib/stripe'
-import { BOOST_HOURS, DODO_CHECKOUT_URL, MIN_BID_USD } from '@/lib/types'
+import { DODO_CHECKOUT_URL, MIN_BID_USD } from '@/lib/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -54,11 +54,13 @@ export async function POST(request: Request) {
   // The bid has to beat whatever boost is live, checked here and not only in
   // the browser.
   if (reader) {
-    const { data: site, error: lookupError } = await reader
-      .from('sites_ranked')
-      .select('id,name')
-      .eq('url', url)
-      .maybeSingle()
+    // Matched on the bare domain, so "outbid.lol", "https://outbid.lol" and
+    // "https://www.outbid.lol/" all find the same row.
+    const { data: matches, error: lookupError } = await reader.rpc('find_site_by_domain', {
+      site_url: url,
+    })
+
+    const site = Array.isArray(matches) ? matches[0] : matches
 
     // Only reject when the lookup succeeded and found nothing. A failed read —
     // an outage, a network blip — must not block a paying bidder, since the
@@ -139,7 +141,7 @@ export async function POST(request: Request) {
         metadata,
         customer: email ? { email } : undefined,
         return_url: `${siteUrl()}/?boosted=true`,
-        description: `Boost ${url} for ${BOOST_HOURS}hrs on viralsites.fyi`,
+        description: `Boost ${url} to the top of viralsites.fyi`,
       }),
     })
 

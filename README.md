@@ -338,11 +338,20 @@ in Postgres, so simultaneous clicks cannot both write back the same +1.
 
 Ranking lives in the `sites_ranked` view rather than the app, so every reader
 agrees on it and offset pagination keeps working — merging two queries would
-make every page boundary a special case. The view exposes `effective_bid`,
-which is the bid only while the boost is live. **Order by that, never by
-`bid_amount`:** an expired bid keeps its number in the column, and sorting on
-it lets a lapsed boost outrank organic sites earning far more. That exact bug
-showed up the first time this was run against Postgres.
+make every page boundary a special case.
+
+**Boosts are permanent.** A bid holds its position until someone outbids it;
+getting outbid drops the rank but keeps the boost. `bid_expires_at` remains on
+the table for the record but no longer affects ranking, so a paid boost never
+silently disappears.
+
+### Matching a site by domain
+
+Bidders type their site every way imaginable — `outbid.lol`,
+`https://outbid.lol`, `https://www.outbid.lol/`. `normalize_domain()` reduces
+all of those to `outbid.lol`, and lookups, click counting and boosting all
+match on it. The column is indexed on that expression, so it stays a single
+index scan. This is what "that site is not listed" used to be.
 
 `/api/bid/checkout` records the intent, then opens a Dodo checkout **for the
 exact bid amount**, carrying `{type: 'bid', site_url, bid_amount}` in metadata.

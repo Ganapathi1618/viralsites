@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Modal from './Modal'
 import { formatMoney } from '@/lib/format'
-import { BID_INCREMENT_USD, BOOST_HOURS, MIN_BID_USD, type Site } from '@/lib/types'
+import { BID_INCREMENT_USD, MIN_BID_USD, type Site } from '@/lib/types'
 
 /** Bid to put a site at the top of the table for a day. */
 export default function BidModal({
@@ -49,7 +49,7 @@ export default function BidModal({
       const payload = (await response.json()) as { url?: string; error?: string; dynamic?: boolean }
 
       if (!response.ok || !payload.url) {
-        setError(payload.error ?? 'Could not start checkout.')
+        setError(payload.error ?? 'Could not start checkout. Try again.')
         setStatus('idle')
         return
       }
@@ -66,12 +66,30 @@ export default function BidModal({
     <Modal open onClose={onClose} title="Bid to boost" subtitle={site.name}>
       <form onSubmit={submit} className="space-y-4">
         <div className="rounded-lg border border-line bg-subtle p-3.5">
-          <p className="label">Current top bid</p>
-          <p className="num mt-1 text-[24px] font-bold leading-none text-ink">
-            {topBid > 0 ? formatMoney(topBid) : 'No bids yet'}
-          </p>
-          <p className="mt-1.5 text-[11.5px] text-body">
-            Your bid must be higher than {formatMoney(topBid)}.
+          {topBid > 0 ? (
+            <>
+              <p className="label">Current #1 bid</p>
+              <p className="num mt-1 text-[24px] font-bold leading-none text-ink">
+                {formatMoney(topBid)}
+              </p>
+              <p className="mt-1.5 text-[11.5px] text-body">
+                Bid {formatMoney(floor)} to take the top spot.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="label">No bids yet</p>
+              <p className="num mt-1 text-[24px] font-bold leading-none text-ink">
+                {formatMoney(MIN_BID_USD)}
+              </p>
+              <p className="mt-1.5 text-[11.5px] text-body">
+                Be the first for {formatMoney(MIN_BID_USD)}.
+              </p>
+            </>
+          )}
+
+          <p className="num mt-2 border-t border-line pt-2 text-[11px] text-muted">
+            {site.name} · {site.clicks.toLocaleString('en-US')} clicks
           </p>
         </div>
 
@@ -94,7 +112,7 @@ export default function BidModal({
             <p className="mt-1 text-[11px] text-down">Minimum is {formatMoney(floor)}.</p>
           ) : (
             <p className="mt-1 text-[11px] text-muted">
-              Puts {site.name} at the top of the table for {BOOST_HOURS} hours.
+              Puts {site.name} at the top of the table until someone outbids it.
             </p>
           )}
         </div>
@@ -128,12 +146,12 @@ export default function BidModal({
             ? 'Recording your bid…'
             : status === 'redirecting'
               ? 'Opening Dodo…'
-              : `Boost for ${BOOST_HOURS}hrs →`}
+              : 'Take the top spot →'}
         </button>
 
         <p className="text-center text-[11px] leading-relaxed text-muted">
-          Checkout charges exactly your bid. The boost goes live the moment the payment is
-          confirmed, and lasts {BOOST_HOURS} hours.
+          Checkout charges exactly your bid. Your spot goes live the moment the payment is
+          confirmed, and holds until someone bids higher.
         </p>
       </form>
     </Modal>

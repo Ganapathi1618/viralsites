@@ -1,7 +1,7 @@
 'use client'
 
 import { formatMoney, formatMonthYear, hostname } from '@/lib/format'
-import type { Site } from '@/lib/types'
+import { BID_INCREMENT_USD, MIN_BID_USD, type Site } from '@/lib/types'
 import { Favicon, ModelTag, TrendCell, VerifiedMark } from './ui'
 
 /**
@@ -41,6 +41,10 @@ export default function SitesTable({
   onSelect: (site: Site) => void
   onBid: (site: Site) => void
 }) {
+  // What the next bid costs anywhere on the board, shown on every row so the
+  // price of the top spot is never a click away.
+  const topBid = Math.max(0, ...sites.map((site) => (site.is_boosted ? site.bid_amount : 0)))
+  const nextBid = Math.max(MIN_BID_USD, topBid + BID_INCREMENT_USD)
   const shown = sites
   const hasMore = sites.length < total
   if (sites.length === 0) {
@@ -168,9 +172,9 @@ export default function SitesTable({
                       event.stopPropagation()
                       onBid(site)
                     }}
-                    className="mt-1 whitespace-nowrap rounded border border-line px-1.5 py-[3px] text-[10px] font-medium text-muted transition hover:border-[#ea580c]/40 hover:text-[#ea580c]"
+                    className="num mt-1 whitespace-nowrap rounded border border-line px-1.5 py-[3px] text-[10px] font-semibold text-muted transition hover:border-[#ea580c]/40 hover:text-[#ea580c]"
                   >
-                    Bid to boost ↑
+                    Bid ↑ {formatMoney(nextBid)}
                   </button>
                 </td>
 

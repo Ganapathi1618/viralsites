@@ -31,33 +31,65 @@ create index if not exists sites_model_type_idx on public.sites (model_type);
 create index if not exists sites_created_at_idx on public.sites (created_at desc);
 create index if not exists sites_bid_idx        on public.sites (bid_amount desc, bid_expires_at desc);
 
+-- The bare domain of a URL: lowercased, no scheme, no www, no path. Bidders
+-- type their site a dozen ways and all of them must find the same row.
+create or replace function public.normalize_domain(value text)
+returns text language sql immutable as $$
+  select regexp_replace(
+           regexp_replace(
+             regexp_replace(lower(coalesce(value, '')), '^\s*https?://', ''),
+             '^www\.', ''),
+           '/.*$', '');
+$$;
+
+create index if not exists sites_domain_idx on public.sites (public.normalize_domain(url));
+
 -- Ranking in one place, so every reader agrees on it. Boosted rows sort above
 -- everything, highest live bid first; the rest fall back to revenue.
 create or replace view public.sites_ranked as
 select
   s.*,
-  (s.bid_amount > 0 and s.bid_expires_at > now()) as is_boosted,
-  case when s.bid_amount > 0 and s.bid_expires_at > now()
-       then 1 else 0 end                          as boost_rank,
-  -- Sort on this, never on bid_amount: an expired bid keeps its number in the
-  -- column, and ordering by that would let a lapsed boost outrank organic
-  -- sites earning far more.
-  case when s.bid_amount > 0 and s.bid_expires_at > now()
-       then s.bid_amount else 0 end               as effective_bid
+  -- Boosts are permanent: a bid holds its position until someone outbids it.
+  -- bid_expires_at stays on the table for the record but no longer affects
+  -- ranking, so a paid boost never silently disappears.
+  (s.bid_amount > 0)                           as is_boosted,
+  case when s.bid_amount > 0 then 1 else 0 end as boost_rank,
+  case when s.bid_amount > 0 then s.bid_amount else 0 end as effective_bid,
+  public.normalize_domain(s.url)               as domain
 from public.sites s;
 
 grant select on public.sites_ranked to anon, authenticated;
 
 -- Clicks are counted in Postgres rather than read-then-write, so simultaneous
--- clicks cannot both write back the same +1.
+-- clicks cannot both write back the same +1, and match on the domain so a link
+-- recorded either way still counts.
 create or replace function public.increment_site_clicks(site_url text)
 returns bigint
 language sql
 security definer
 set search_path = public
 as $$
-  update public.sites set clicks = clicks + 1 where url = site_url returning clicks;
+  update public.sites set clicks = clicks + 1
+  where public.normalize_domain(url) = public.normalize_domain(site_url)
+  returning clicks;
 $$;
+
+create or replace function public.find_site_by_domain(site_url text)
+returns table (id uuid, name text, url text, clicks bigint, bid_amount numeric)
+language sql stable security definer set search_path = public as $$
+  select s.id, s.name, s.url, s.clicks, s.bid_amount from public.sites s
+  where public.normalize_domain(s.url) = public.normalize_domain(site_url) limit 1;
+$$;
+
+create or replace function public.apply_boost(site_url text, new_bid numeric)
+returns uuid language sql security definer set search_path = public as $$
+  update public.sites set bid_amount = new_bid
+  where public.normalize_domain(url) = public.normalize_domain(site_url)
+  returning id;
+$$;
+
+grant execute on function public.find_site_by_domain(text) to anon, authenticated;
+grant execute on function public.apply_boost(text, numeric) to service_role;
 
 grant execute on function public.increment_site_clicks(text) to anon, authenticated;
 

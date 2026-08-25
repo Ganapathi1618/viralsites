@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { verifyWebhookSignature } from '@/lib/webhook-signature'
-import { BOOST_HOURS } from '@/lib/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,8 +12,8 @@ const PAID_EVENTS = new Set(['payment.succeeded', 'subscription.active'])
  * Dodo Payments webhook.
  *
  * Two flows, split by metadata. A payment carrying `type: 'bid'` boosts the
- * site named in `site_url` for BOOST_HOURS and touches nothing else. Anything
- * else is a sponsor slot purchase: it takes the most recent pending
+ * site named in `site_url` and touches nothing else. Anything else is a
+ * sponsor slot purchase: it takes the most recent pending
  * advertise_request and fills the lowest-numbered free slot.
  *
  * Pairing by "most recent pending" is a heuristic: Dodo's hosted checkout
@@ -86,31 +85,29 @@ export async function POST(request: Request) {
         return NextResponse.json({ received: true, boosted: false, reason: 'bad metadata' })
       }
 
-      const expires = new Date(Date.now() + BOOST_HOURS * 3_600_000).toISOString()
-
-      const { data: boosted, error: boostError } = await supabase
-        .from('sites')
-        .update({ bid_amount: bidAmount, bid_expires_at: expires })
-        .eq('url', siteUrl)
-        .select('id')
-        .maybeSingle()
+      // Boosts are permanent: the bid holds its rank until someone outbids
+      // it, so nothing sets an expiry. Matched on the bare domain so the URL
+      // the bidder typed does not have to match the stored one exactly.
+      const { data: boostedId, error: boostError } = await supabase.rpc('apply_boost', {
+        site_url: siteUrl,
+        new_bid: bidAmount,
+      })
 
       if (boostError) throw new Error(`boost: ${boostError.message}`)
 
-      if (!boosted) {
+      if (!boostedId) {
         console.error('[dodo] paid bid for a site that is not listed:', siteUrl)
         return NextResponse.json({ received: true, boosted: false, reason: 'site not found' })
       }
 
-      // Settle the matching pending bid row, for the record.
       await supabase
         .from('bids')
         .update({ status: 'paid' })
-        .eq('site_id', boosted.id)
+        .eq('site_id', boostedId)
         .eq('status', 'pending')
 
-      console.log(`[dodo] ${type} → boosted ${siteUrl} at $${bidAmount} until ${expires}`)
-      return NextResponse.json({ received: true, boosted: true, until: expires })
+      console.log(`[dodo] ${type} → boosted ${siteUrl} at $${bidAmount}`)
+      return NextResponse.json({ received: true, boosted: true, bid: bidAmount })
     }
 
     const { data: pending, error: requestError } = await supabase

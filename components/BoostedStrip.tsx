@@ -62,7 +62,7 @@ export default function BoostedStrip({
               onClick={() => onOutbid(site)}
               className="mt-2 w-full rounded border border-[#ea580c]/35 px-2 py-1.5 text-[11px] font-semibold text-[#ea580c] transition hover:bg-[#ea580c] hover:text-white"
             >
-              Outbid → {formatMoney(site.bid_amount + BID_INCREMENT_USD)}
+              Outbid for {formatMoney(site.bid_amount + BID_INCREMENT_USD)} →
             </button>
           </div>
         ))}
