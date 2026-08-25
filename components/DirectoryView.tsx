@@ -71,7 +71,7 @@ export default function DirectoryView({
         </p>
       ) : null}
 
-      <BoostedStrip sites={sites.filter((site) => site.is_boosted)} />
+      <BoostedStrip sites={sites.filter((site) => site.is_boosted)} onOutbid={setBidSite} />
 
       <TopEarnersRow
         sites={[...topEarners].sort((a, b) => b.revenue_amount - a.revenue_amount)}

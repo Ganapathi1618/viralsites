@@ -61,6 +61,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${inter.variable} ${mono.variable}`}>
       <head>
         <script defer src={umamiScriptSrc()} data-website-id={umamiWebsiteId()} />
+        <script
+          defer
+          data-website-id="dfid_vGpUzorjuNOwlhQikL4ui"
+          data-domain="viralsites.fyi"
+          src="https://datafa.st/js/script.js"
+        />
       </head>
       <body className="bg-page font-sans text-ink antialiased">{children}</body>
     </html>

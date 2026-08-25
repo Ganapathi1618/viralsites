@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Modal from './Modal'
 import { formatMoney } from '@/lib/format'
-import { BOOST_HOURS, DODO_CHECKOUT_URL, MIN_BID_USD, type Site } from '@/lib/types'
+import { BID_INCREMENT_USD, BOOST_HOURS, MIN_BID_USD, type Site } from '@/lib/types'
 
 /** Bid to put a site at the top of the table for a day. */
 export default function BidModal({
@@ -15,7 +15,9 @@ export default function BidModal({
   topBid: number
   onClose: () => void
 }) {
-  const floor = Math.max(MIN_BID_USD, topBid + 1)
+  // Beat the board's top bid by a dollar, or start at the floor if nobody has
+  // bid yet.
+  const floor = Math.max(MIN_BID_USD, topBid + BID_INCREMENT_USD)
   const [amount, setAmount] = useState(String(floor))
   const [status, setStatus] = useState<'idle' | 'saving' | 'redirecting'>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -35,21 +37,25 @@ export default function BidModal({
     setError(null)
 
     try {
-      const response = await fetch('/api/bid', {
+      const response = await fetch('/api/bid/checkout', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ site_id: site.id, amount: value, email }),
+        body: JSON.stringify({
+          site_url: site.url,
+          bid_amount: value,
+          bidder_email: email,
+        }),
       })
-      const payload = (await response.json()) as { error?: string }
+      const payload = (await response.json()) as { url?: string; error?: string; dynamic?: boolean }
 
-      if (!response.ok) {
-        setError(payload.error ?? 'Could not record your bid.')
+      if (!response.ok || !payload.url) {
+        setError(payload.error ?? 'Could not start checkout.')
         setStatus('idle')
         return
       }
 
       setStatus('redirecting')
-      window.location.href = DODO_CHECKOUT_URL
+      window.location.href = payload.url
     } catch {
       setError('Network error. Try again.')
       setStatus('idle')
@@ -65,7 +71,7 @@ export default function BidModal({
             {topBid > 0 ? formatMoney(topBid) : 'No bids yet'}
           </p>
           <p className="mt-1.5 text-[11.5px] text-body">
-            Your bid must be higher than {formatMoney(Math.max(topBid, MIN_BID_USD - 1))}.
+            Your bid must be higher than {formatMoney(topBid)}.
           </p>
         </div>
 
@@ -105,7 +111,7 @@ export default function BidModal({
             className="field"
           />
           <p className="mt-1 text-[11px] text-muted">
-            So we can match your payment to this bid.
+            For the receipt, and so we can reach you about the boost.
           </p>
         </div>
 
@@ -126,8 +132,8 @@ export default function BidModal({
         </button>
 
         <p className="text-center text-[11px] leading-relaxed text-muted">
-          The boost goes live once the payment is confirmed. Checkout currently charges a fixed
-          amount, so anything above it is settled by hand until per-bid pricing is wired up.
+          Checkout charges exactly your bid. The boost goes live the moment the payment is
+          confirmed, and lasts {BOOST_HOURS} hours.
         </p>
       </form>
     </Modal>

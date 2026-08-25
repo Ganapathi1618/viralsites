@@ -18,6 +18,10 @@ create table if not exists public.sites (
   trend_percent      numeric(6,2),
   launched_at        date,
   is_featured        boolean not null default false,
+  clicks             bigint not null default 0,
+  -- A boost is live while bid_amount > 0 and bid_expires_at is in the future.
+  bid_amount         numeric(12,2) not null default 0,
+  bid_expires_at     timestamptz,
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );
@@ -25,6 +29,52 @@ create table if not exists public.sites (
 create index if not exists sites_revenue_idx    on public.sites (revenue_amount desc);
 create index if not exists sites_model_type_idx on public.sites (model_type);
 create index if not exists sites_created_at_idx on public.sites (created_at desc);
+create index if not exists sites_bid_idx        on public.sites (bid_amount desc, bid_expires_at desc);
+
+-- Ranking in one place, so every reader agrees on it. Boosted rows sort above
+-- everything, highest live bid first; the rest fall back to revenue.
+create or replace view public.sites_ranked as
+select
+  s.*,
+  (s.bid_amount > 0 and s.bid_expires_at > now()) as is_boosted,
+  case when s.bid_amount > 0 and s.bid_expires_at > now()
+       then 1 else 0 end                          as boost_rank,
+  -- Sort on this, never on bid_amount: an expired bid keeps its number in the
+  -- column, and ordering by that would let a lapsed boost outrank organic
+  -- sites earning far more.
+  case when s.bid_amount > 0 and s.bid_expires_at > now()
+       then s.bid_amount else 0 end               as effective_bid
+from public.sites s;
+
+grant select on public.sites_ranked to anon, authenticated;
+
+-- Clicks are counted in Postgres rather than read-then-write, so simultaneous
+-- clicks cannot both write back the same +1.
+create or replace function public.increment_site_clicks(site_url text)
+returns bigint
+language sql
+security definer
+set search_path = public
+as $$
+  update public.sites set clicks = clicks + 1 where url = site_url returning clicks;
+$$;
+
+grant execute on function public.increment_site_clicks(text) to anon, authenticated;
+
+-- ---------------------------------------------------------------- bids -----
+-- What a bidder asked for, before any money confirms it. Only the payment
+-- webhook applies a boost to a site.
+create table if not exists public.bids (
+  id         uuid primary key default gen_random_uuid(),
+  site_id    uuid not null references public.sites(id) on delete cascade,
+  amount     numeric(12,2) not null check (amount >= 1),
+  email      text,
+  status     text not null default 'pending'
+               check (status in ('pending','paid','cancelled')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists bids_created_at_idx on public.bids (created_at desc);
 
 -- ------------------------------------------------------------- ad_slots ----
 create table if not exists public.ad_slots (
@@ -80,24 +130,6 @@ create table if not exists public.advertise_requests (
 create index if not exists advertise_requests_created_at_idx
   on public.advertise_requests (created_at desc);
 
--- ----------------------------------------------------------- page_views ----
--- One row, one number: the site-wide pageview total shown in the header.
-create table if not exists public.page_views (
-  id          text primary key default 'main',
-  total_views bigint not null default 0
-);
-
--- ------------------------------------------------------ active_visitors ----
--- One row per browser session, swept clean two minutes after its last
--- heartbeat. Drives the "N live" badge in the header.
-create table if not exists public.active_visitors (
-  id        text primary key,
-  last_seen timestamptz not null default now()
-);
-
-create index if not exists active_visitors_last_seen_idx
-  on public.active_visitors (last_seen desc);
-
 -- ------------------------------------------------------ updated_at bump ----
 create or replace function public.touch_updated_at()
 returns trigger language plpgsql as $$
@@ -117,10 +149,7 @@ alter table public.sites       enable row level security;
 alter table public.ad_slots    enable row level security;
 alter table public.submissions enable row level security;
 alter table public.advertise_requests enable row level security;
-alter table public.page_views enable row level security;
--- active_visitors gets no policies at all: it is reached only through the
--- security-definer functions below, so session ids never leave the server.
-alter table public.active_visitors enable row level security;
+alter table public.bids enable row level security;
 
 -- The directory and both sidebars are public reads.
 drop policy if exists "sites are public" on public.sites;

@@ -12,9 +12,10 @@ const PAID_EVENTS = new Set(['payment.succeeded', 'subscription.active'])
 /**
  * Dodo Payments webhook.
  *
- * On a paid event it settles the most recent pending bid if there is one —
- * boosting that site for BOOST_HOURS — and otherwise takes the most recent
- * pending advertise_request and puts it into the lowest-numbered free slot.
+ * Two flows, split by metadata. A payment carrying `type: 'bid'` boosts the
+ * site named in `site_url` for BOOST_HOURS and touches nothing else. Anything
+ * else is a sponsor slot purchase: it takes the most recent pending
+ * advertise_request and fills the lowest-numbered free slot.
  *
  * Pairing by "most recent pending" is a heuristic: Dodo's hosted checkout
  * carries no reference back to the row we wrote before redirecting, so there
@@ -46,7 +47,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid signature.' }, { status: 401 })
   }
 
-  let event: { type?: string; data?: Record<string, unknown> }
+  let event: {
+    type?: string
+    data?: Record<string, unknown> & { metadata?: Record<string, unknown> }
+  }
   try {
     event = JSON.parse(body)
   } catch {
@@ -70,29 +74,42 @@ export async function POST(request: Request) {
     firstString(event.data, ['payment_id', 'subscription_id', 'id']) ?? `dodo:${Date.now()}`
 
   try {
-    // A pending bid outranks a pending slot request: bids are time-boxed and
-    // the bidder is watching the board for their boost to appear.
-    const { data: bid } = await supabase
-      .from('bids')
-      .select('id,site_id,amount')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    // A bid checkout carries its target in metadata, so there is nothing to
+    // guess: boost exactly the site that was paid for and leave ad_slots alone.
+    if (String(event.data?.metadata?.type ?? '') === 'bid') {
+      const metadata = event.data?.metadata ?? {}
+      const siteUrl = String(metadata.site_url ?? '')
+      const bidAmount = Number(metadata.bid_amount)
 
-    if (bid) {
+      if (!siteUrl || !Number.isFinite(bidAmount) || bidAmount <= 0) {
+        console.error('[dodo] bid event with unusable metadata:', JSON.stringify(metadata))
+        return NextResponse.json({ received: true, boosted: false, reason: 'bad metadata' })
+      }
+
       const expires = new Date(Date.now() + BOOST_HOURS * 3_600_000).toISOString()
 
-      const { error: boostError } = await supabase
+      const { data: boosted, error: boostError } = await supabase
         .from('sites')
-        .update({ bid_amount: Number(bid.amount), bid_expires_at: expires })
-        .eq('id', bid.site_id)
+        .update({ bid_amount: bidAmount, bid_expires_at: expires })
+        .eq('url', siteUrl)
+        .select('id')
+        .maybeSingle()
 
       if (boostError) throw new Error(`boost: ${boostError.message}`)
 
-      await supabase.from('bids').update({ status: 'paid' }).eq('id', bid.id)
+      if (!boosted) {
+        console.error('[dodo] paid bid for a site that is not listed:', siteUrl)
+        return NextResponse.json({ received: true, boosted: false, reason: 'site not found' })
+      }
 
-      console.log(`[dodo] ${type} → boosted site ${bid.site_id} at $${bid.amount}`)
+      // Settle the matching pending bid row, for the record.
+      await supabase
+        .from('bids')
+        .update({ status: 'paid' })
+        .eq('site_id', boosted.id)
+        .eq('status', 'pending')
+
+      console.log(`[dodo] ${type} → boosted ${siteUrl} at $${bidAmount} until ${expires}`)
       return NextResponse.json({ received: true, boosted: true, until: expires })
     }
 

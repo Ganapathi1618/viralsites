@@ -316,51 +316,15 @@ workflow.
 | `CRON_SECRET` | yes in prod | Guards `/api/cron/scrape` |
 | `SCRAPER_SOURCE_URLS` | no | Comma-separated; defaults to outbid.lol,outbid.fyi |
 
-## Analytics and the view counter
+## Analytics
 
-Two separate things.
+**Datafast** and **Umami**, both as plain script tags in `<head>`. Neither
+feeds anything on the page — they report to their own dashboards.
 
-**Umami** is the analytics tool. The script is in `<head>` in `app/layout.tsx`,
-with the website id falling back to the production value in `lib/analytics.ts`
-so tracking survives a missing env var. It reports to the Umami dashboard and
-nothing on the site reads from it.
-
-**The header's view count** is the site's own, kept in `page_views` in Supabase.
-`ViewCounter` posts to `/api/pageview` on mount and shows the total the reply
-returns, so the number includes the visit that is looking at it. The increment
-runs inside Postgres via `increment_page_views()` rather than a read-then-write
-from the app, so two visitors landing in the same instant cannot both write
-back the same +1.
-
-It counts raw page loads, bots included, so it will read higher than Umami's
-visitor figure. That is the usual trade for a public counter — it is social
-proof, not analytics.
-
-**The "N live" badge** counts current visitors from `active_visitors`. Each tab
-generates a session id once, keeps it in `sessionStorage`, and posts a
-heartbeat every 30 seconds. The route sweeps rows older than **two minutes**,
-upserts the session, then counts what is left — three missed beats before a
-visitor drops off.
-
-The sweep lives in the route rather than only in `touch_visitor()` so the
-window can be changed by a deploy; a Postgres function only changes when
-someone runs a migration. The function keeps the same logic for the fallback
-path, and `006_visitor_cleanup_cron.sql` adds a pg_cron job that sweeps once a
-minute as a backstop.
-
-Note that the count filters by timestamp regardless, so a stale row that has
-not been deleted yet was never counted — rows lingering in the table editor
-between visits look wrong but never inflated the badge.
-
-The badge hides below two, because "1 live" tells every visitor they are alone
-on the page. Session ids are validated against `^[A-Za-z0-9_-]{8,64}$` before
-being stored, and `active_visitors` carries no RLS policies at all: it is
-reachable only through the security-definer functions, so ids never leave the
-server.
-
-A determined visitor could still post several distinct ids and inflate the
-figure. Nothing here is load-bearing enough to warrant an IP-derived id, but
-that is the fix if it ever matters.
+Supabase-side tracking is gone: no `page_views`, no `active_visitors`, no view
+or live-visitor badges. The header carries only the directory's own figures.
+`008_drop_tracking_lower_bid_floor.sql` removes the tables and functions from a
+database that already has them.
 
 ## Clicks and paid boosting
 
@@ -380,21 +344,28 @@ which is the bid only while the boost is live. **Order by that, never by
 it lets a lapsed boost outrank organic sites earning far more. That exact bug
 showed up the first time this was run against Postgres.
 
-A bid writes a `pending` row in `bids` and sends the bidder to Dodo. **Nothing
-in the app boosts a site** — only the payment webhook promotes a bid to `paid`
-and sets `bid_expires_at`, so nobody can reach the top of the board by calling
-an endpoint. Bids must clear $10 and beat the highest live bid, checked
+`/api/bid/checkout` records the intent, then opens a Dodo checkout **for the
+exact bid amount**, carrying `{type: 'bid', site_url, bid_amount}` in metadata.
+The webhook reads that back and boosts precisely that site — no guessing which
+pending row a payment belongs to, which is what the sponsor-slot flow still has
+to do.
+
+**Nothing in the app boosts a site.** Only the webhook sets `bid_amount` and
+`bid_expires_at`, so nobody reaches the top of the board by calling an
+endpoint. A bid must clear $1 and beat the highest live bid, checked
 server-side as well as in the modal.
 
-### What is not wired up yet
+### The one unverified piece
 
-Checkout uses a fixed Dodo link, so the amount charged is the product's price
-rather than the bid. Anything above it has to be settled by hand until per-bid
-pricing exists, and the modal says so rather than implying otherwise.
+**Dodo's API shape could not be checked while this was written** — their docs
+are unreachable from the build environment. The request follows their published
+pattern (bearer key, minor units, metadata, return_url) and every part is
+overridable: `DODO_API_URL`, `DODO_BID_PRODUCT_ID`, `DODO_API_KEY`.
 
-The webhook settles the most recent pending bid, which — like the sponsor slot
-flow — is a heuristic, since Dodo's hosted checkout carries no reference back
-to the row. Two bids placed in the same moment can cross.
+If the call fails for any reason — wrong shape, missing key, network — the
+route falls back to the fixed checkout link and flags `dynamic: false` in the
+response, so a bidder never hits a dead end. Watch the server log on the first
+real bid: it prints Dodo's exact response when the call is rejected.
 
 ## Design
 

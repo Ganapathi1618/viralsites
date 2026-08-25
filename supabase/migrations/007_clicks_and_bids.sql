@@ -55,7 +55,7 @@ grant execute on function public.increment_site_clicks(text) to anon, authentica
 create table if not exists public.bids (
   id         uuid primary key default gen_random_uuid(),
   site_id    uuid not null references public.sites(id) on delete cascade,
-  amount     numeric(12,2) not null check (amount >= 10),
+  amount     numeric(12,2) not null check (amount >= 1),
   email      text,
   status     text not null default 'pending'
                check (status in ('pending','paid','cancelled')),

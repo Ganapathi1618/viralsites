@@ -50,8 +50,13 @@ export type Site = {
   is_boosted: boolean
 }
 
-/** Floor for a boost bid, and how long one lasts. */
-export const MIN_BID_USD = 10
+/**
+ * Floor for a boost bid, and how long one lasts. A bid must also beat the
+ * highest live bid by at least a dollar, so this floor only applies to the
+ * very first bid on an empty board.
+ */
+export const MIN_BID_USD = 1
+export const BID_INCREMENT_USD = 1
 export const BOOST_HOURS = 24
 
 export type AdSlot = {
