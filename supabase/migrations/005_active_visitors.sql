@@ -17,7 +17,7 @@ alter table public.active_visitors enable row level security;
 
 /*
  * One heartbeat: record this visitor, forget anyone who has gone quiet for
- * five minutes, and return how many are left.
+ * two minutes, and return how many are left.
  *
  * All three happen in one statement chain so the route makes a single round
  * trip, and the sweep rides along with the writes rather than needing a cron.
@@ -35,7 +35,7 @@ begin
   values (visitor_id, now())
   on conflict (id) do update set last_seen = now();
 
-  delete from public.active_visitors where last_seen < now() - interval '5 minutes';
+  delete from public.active_visitors where last_seen < now() - interval '2 minutes';
 
   select count(*) into live from public.active_visitors;
   return live;
@@ -51,7 +51,7 @@ set search_path = public
 as $$
   select count(*)::integer
   from public.active_visitors
-  where last_seen > now() - interval '5 minutes';
+  where last_seen > now() - interval '2 minutes';
 $$;
 
 grant execute on function public.touch_visitor(text) to anon, authenticated;

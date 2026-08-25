@@ -88,7 +88,7 @@ create table if not exists public.page_views (
 );
 
 -- ------------------------------------------------------ active_visitors ----
--- One row per browser session, swept clean five minutes after its last
+-- One row per browser session, swept clean two minutes after its last
 -- heartbeat. Drives the "N live" badge in the header.
 create table if not exists public.active_visitors (
   id        text primary key,

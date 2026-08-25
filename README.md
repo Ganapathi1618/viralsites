@@ -338,9 +338,19 @@ proof, not analytics.
 
 **The "N live" badge** counts current visitors from `active_visitors`. Each tab
 generates a session id once, keeps it in `sessionStorage`, and posts a
-heartbeat every 30 seconds; `touch_visitor()` records it, deletes anyone quiet
-for five minutes, and returns the remaining count — one round trip, and the
-sweep rides along with the writes rather than needing a cron.
+heartbeat every 30 seconds. The route sweeps rows older than **two minutes**,
+upserts the session, then counts what is left — three missed beats before a
+visitor drops off.
+
+The sweep lives in the route rather than only in `touch_visitor()` so the
+window can be changed by a deploy; a Postgres function only changes when
+someone runs a migration. The function keeps the same logic for the fallback
+path, and `006_visitor_cleanup_cron.sql` adds a pg_cron job that sweeps once a
+minute as a backstop.
+
+Note that the count filters by timestamp regardless, so a stale row that has
+not been deleted yet was never counted — rows lingering in the table editor
+between visits look wrong but never inflated the badge.
 
 The badge hides below two, because "1 live" tells every visitor they are alone
 on the page. Session ids are validated against `^[A-Za-z0-9_-]{8,64}$` before
