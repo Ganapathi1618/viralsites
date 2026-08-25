@@ -362,6 +362,40 @@ A determined visitor could still post several distinct ids and inflate the
 figure. Nothing here is load-bearing enough to warrant an IP-derived id, but
 that is the fix if it ever matters.
 
+## Clicks and paid boosting
+
+**Clicks** are counted on every outbound link — the site name in the table, the
+top-earner cards and the drawer's Visit button. The request is fired with
+`keepalive` and never awaited, so a slow counter cannot delay the navigation
+the visitor actually asked for. `increment_site_clicks()` does the arithmetic
+in Postgres, so simultaneous clicks cannot both write back the same +1.
+
+**Boosting** lets a site buy the top of the table for 24 hours.
+
+Ranking lives in the `sites_ranked` view rather than the app, so every reader
+agrees on it and offset pagination keeps working — merging two queries would
+make every page boundary a special case. The view exposes `effective_bid`,
+which is the bid only while the boost is live. **Order by that, never by
+`bid_amount`:** an expired bid keeps its number in the column, and sorting on
+it lets a lapsed boost outrank organic sites earning far more. That exact bug
+showed up the first time this was run against Postgres.
+
+A bid writes a `pending` row in `bids` and sends the bidder to Dodo. **Nothing
+in the app boosts a site** — only the payment webhook promotes a bid to `paid`
+and sets `bid_expires_at`, so nobody can reach the top of the board by calling
+an endpoint. Bids must clear $10 and beat the highest live bid, checked
+server-side as well as in the modal.
+
+### What is not wired up yet
+
+Checkout uses a fixed Dodo link, so the amount charged is the product's price
+rather than the bid. Anything above it has to be settled by hand until per-bid
+pricing exists, and the modal says so rather than implying otherwise.
+
+The webhook settles the most recent pending bid, which — like the sponsor slot
+flow — is a heuristic, since Dodo's hosted checkout carries no reference back
+to the row. Two bids placed in the same moment can cross.
+
 ## Design
 
 White (`#ffffff`), `#f5f5f5` fills, `#ebebeb` borders, `#0066ff` for actions and

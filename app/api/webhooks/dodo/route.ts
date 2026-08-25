@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { verifyWebhookSignature } from '@/lib/webhook-signature'
+import { BOOST_HOURS } from '@/lib/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -11,8 +12,9 @@ const PAID_EVENTS = new Set(['payment.succeeded', 'subscription.active'])
 /**
  * Dodo Payments webhook.
  *
- * On a paid event it takes the most recent pending advertise_request, puts it
- * into the lowest-numbered free slot, and marks the request approved.
+ * On a paid event it settles the most recent pending bid if there is one —
+ * boosting that site for BOOST_HOURS — and otherwise takes the most recent
+ * pending advertise_request and puts it into the lowest-numbered free slot.
  *
  * Pairing by "most recent pending" is a heuristic: Dodo's hosted checkout
  * carries no reference back to the row we wrote before redirecting, so there
@@ -68,6 +70,32 @@ export async function POST(request: Request) {
     firstString(event.data, ['payment_id', 'subscription_id', 'id']) ?? `dodo:${Date.now()}`
 
   try {
+    // A pending bid outranks a pending slot request: bids are time-boxed and
+    // the bidder is watching the board for their boost to appear.
+    const { data: bid } = await supabase
+      .from('bids')
+      .select('id,site_id,amount')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (bid) {
+      const expires = new Date(Date.now() + BOOST_HOURS * 3_600_000).toISOString()
+
+      const { error: boostError } = await supabase
+        .from('sites')
+        .update({ bid_amount: Number(bid.amount), bid_expires_at: expires })
+        .eq('id', bid.site_id)
+
+      if (boostError) throw new Error(`boost: ${boostError.message}`)
+
+      await supabase.from('bids').update({ status: 'paid' }).eq('id', bid.id)
+
+      console.log(`[dodo] ${type} → boosted site ${bid.site_id} at $${bid.amount}`)
+      return NextResponse.json({ received: true, boosted: true, until: expires })
+    }
+
     const { data: pending, error: requestError } = await supabase
       .from('advertise_requests')
       .select('id,company_name,company_url,one_liner,email')

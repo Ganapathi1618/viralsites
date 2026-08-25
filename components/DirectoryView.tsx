@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import BidModal from './BidModal'
+import BoostedStrip from './BoostedStrip'
 import SiteDrawer from './SiteDrawer'
 import SitesTable from './SitesTable'
 import StatsBar from './StatsBar'
@@ -26,6 +28,7 @@ export default function DirectoryView({
 }) {
   const [sites, setSites] = useState<Site[]>(initialSites)
   const [drawerSite, setDrawerSite] = useState<Site | null>(null)
+  const [bidSite, setBidSite] = useState<Site | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -68,7 +71,11 @@ export default function DirectoryView({
         </p>
       ) : null}
 
-      <TopEarnersRow sites={topEarners} />
+      <BoostedStrip sites={sites.filter((site) => site.is_boosted)} />
+
+      <TopEarnersRow
+        sites={[...topEarners].sort((a, b) => b.revenue_amount - a.revenue_amount)}
+      />
 
       <div className="mt-5">
         <SitesTable
@@ -78,10 +85,19 @@ export default function DirectoryView({
           error={loadError}
           onLoadMore={loadMore}
           onSelect={setDrawerSite}
+          onBid={setBidSite}
         />
       </div>
 
       <SiteDrawer site={drawerSite} onClose={() => setDrawerSite(null)} />
+
+      <BidModal
+        site={bidSite}
+        // The highest live bid anywhere on the board is what a new bid must
+        // beat, not just the bid on the row that was clicked.
+        topBid={Math.max(0, ...sites.filter((site) => site.is_boosted).map((site) => site.bid_amount))}
+        onClose={() => setBidSite(null)}
+      />
     </>
   )
 }

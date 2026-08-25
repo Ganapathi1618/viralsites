@@ -38,6 +38,10 @@ export const DEMO_SITES: Site[] = SEEDS.map(
     launched_at,
     is_featured,
     created_at: ago(index * 3 + 1),
+    clicks: 0,
+    bid_amount: 0,
+    bid_expires_at: null,
+    is_boosted: false,
   }),
 )
 

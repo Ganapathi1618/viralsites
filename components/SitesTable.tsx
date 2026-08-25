@@ -4,6 +4,24 @@ import { formatMoney, formatMonthYear, hostname } from '@/lib/format'
 import type { Site } from '@/lib/types'
 import { Favicon, ModelTag, TrendCell, VerifiedMark } from './ui'
 
+/**
+ * Records the click, then opens the site. `keepalive` lets the request survive
+ * the tab losing focus, and nothing is awaited — a slow counter must never
+ * delay the link the visitor actually asked for.
+ */
+function trackClick(url: string) {
+  try {
+    fetch('/api/click', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url }),
+      keepalive: true,
+    }).catch(() => {})
+  } catch {
+    // Never let counting break navigation.
+  }
+}
+
 const MEDALS = ['🥇', '🥈', '🥉']
 
 export default function SitesTable({
@@ -13,6 +31,7 @@ export default function SitesTable({
   error,
   onLoadMore,
   onSelect,
+  onBid,
 }: {
   sites: Site[]
   total: number
@@ -20,6 +39,7 @@ export default function SitesTable({
   error: string | null
   onLoadMore: () => void
   onSelect: (site: Site) => void
+  onBid: (site: Site) => void
 }) {
   const shown = sites
   const hasMore = sites.length < total
@@ -77,11 +97,25 @@ export default function SitesTable({
                   <div className="flex items-start gap-2.5">
                     <Favicon name={site.name} />
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate text-[13.5px] font-semibold text-ink group-hover:text-brand">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <a
+                          href={site.url}
+                          target="_blank"
+                          rel="noopener noreferrer nofollow"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            trackClick(site.url)
+                          }}
+                          className="truncate text-[13.5px] font-semibold text-ink hover:text-brand group-hover:text-brand"
+                        >
                           {site.name}
-                        </span>
+                        </a>
                         {site.revenue_verified ? <VerifiedMark /> : null}
+                        {site.is_boosted ? (
+                          <span className="inline-flex items-center rounded bg-[#ea580c]/[0.1] px-1.5 py-[2px] font-mono text-[9.5px] font-semibold tracking-wide text-[#ea580c]">
+                            🔥 BOOSTED
+                          </span>
+                        ) : null}
                       </div>
                       <p className="mt-0.5 line-clamp-1 max-w-md text-[12px] text-body">
                         {site.description}
@@ -101,6 +135,9 @@ export default function SitesTable({
                   <span className="num block text-[13.5px] font-bold text-money">
                     {formatMoney(site.revenue_amount)}
                   </span>
+                  <span className="num mt-0.5 block text-[10.5px] text-muted">
+                    {site.clicks.toLocaleString('en-US')} clicks
+                  </span>
                   <span className="mt-0.5 inline-flex items-center justify-end gap-1 text-[10.5px] text-muted">
                     {site.revenue_verified ? 'verified' : 'estimated'}
                     {site.revenue_verified && site.revenue_source_url ? (
@@ -118,8 +155,23 @@ export default function SitesTable({
                   </span>
                 </td>
 
-                <td className="px-3 py-3 text-right">
+                <td className="px-3 py-3 text-right align-top">
                   <TrendCell percent={site.trend_percent} />
+                  {site.is_boosted ? (
+                    <span className="num mt-0.5 block text-[10px] font-semibold text-[#ea580c]">
+                      bid {formatMoney(site.bid_amount)}
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onBid(site)
+                    }}
+                    className="mt-1 whitespace-nowrap rounded border border-line px-1.5 py-[3px] text-[10px] font-medium text-muted transition hover:border-[#ea580c]/40 hover:text-[#ea580c]"
+                  >
+                    Bid to boost ↑
+                  </button>
                 </td>
 
                 <td className="num px-3 py-3 text-right text-[11.5px] text-muted">

@@ -43,7 +43,16 @@ export type Site = {
   launched_at: string | null
   is_featured: boolean
   created_at: string
+  clicks: number
+  bid_amount: number
+  bid_expires_at: string | null
+  /** True while a paid boost is live; computed by the sites_ranked view. */
+  is_boosted: boolean
 }
+
+/** Floor for a boost bid, and how long one lasts. */
+export const MIN_BID_USD = 10
+export const BOOST_HOURS = 24
 
 export type AdSlot = {
   id: string

@@ -132,6 +132,13 @@ export default function SiteDrawer({ site, onClose }: { site: Site | null; onClo
           </div>
 
           <div className="flex items-baseline justify-between border-t border-line pt-4">
+            <span className="text-[12.5px] text-muted">Clicks from here</span>
+            <span className="num text-[12.5px] font-medium text-ink">
+              {site.clicks.toLocaleString('en-US')}
+            </span>
+          </div>
+
+          <div className="flex items-baseline justify-between">
             <span className="text-[12.5px] text-muted">Launched</span>
             <span className="num text-[12.5px] font-medium text-ink">
               {formatMonthYear(site.launched_at)}
@@ -144,6 +151,15 @@ export default function SiteDrawer({ site, onClose }: { site: Site | null; onClo
             href={site.url}
             target="_blank"
             rel="noopener noreferrer nofollow"
+            onClick={() => {
+              // Fire and forget; never delay the visitor's navigation.
+              fetch('/api/click', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ url: site.url }),
+                keepalive: true,
+              }).catch(() => {})
+            }}
             className="btn-primary w-full !py-2.5"
           >
             Visit site →

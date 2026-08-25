@@ -25,7 +25,17 @@ export const PAGE_SIZE = 10
 const SUMMARY_LIMIT = 1000
 
 const SITE_COLUMNS =
-  'id,name,url,description,model_type,revenue_amount,revenue_verified,revenue_source_url,trend_percent,launched_at,is_featured,created_at'
+  'id,name,url,description,model_type,revenue_amount,revenue_verified,revenue_source_url,trend_percent,launched_at,is_featured,created_at,clicks,bid_amount,bid_expires_at,is_boosted,effective_bid'
+
+/**
+ * Reads go through the sites_ranked view, which adds is_boosted and
+ * effective_bid. Ordering by effective_bid rather than bid_amount matters: an
+ * expired bid keeps its number in the column, and sorting on that would let a
+ * lapsed boost outrank organic sites earning far more.
+ */
+const RANKED = 'sites_ranked'
+
+
 
 /** Just enough columns to total revenue and rank the leaderboard. */
 const SUMMARY_COLUMNS = 'id,name,url,revenue_amount,created_at'
@@ -63,12 +73,14 @@ export async function getDirectoryData(): Promise<DirectoryData> {
 
   const [pageResult, summaryResult, slotsResult] = await Promise.all([
     supabase
-      .from('sites')
+      .from(RANKED)
       .select(SITE_COLUMNS, { count: 'exact' })
+      .order('boost_rank', { ascending: false })
+      .order('effective_bid', { ascending: false })
       .order('revenue_amount', { ascending: false })
       .range(0, PAGE_SIZE - 1),
     supabase
-      .from('sites')
+      .from(RANKED)
       .select(SUMMARY_COLUMNS)
       .order('revenue_amount', { ascending: false })
       .limit(SUMMARY_LIMIT),
@@ -136,8 +148,10 @@ export async function getSitesPage(offset: number, limit = PAGE_SIZE) {
   }
 
   const { data, error, count } = await supabase
-    .from('sites')
+    .from(RANKED)
     .select(SITE_COLUMNS, { count: 'exact' })
+    .order('boost_rank', { ascending: false })
+    .order('effective_bid', { ascending: false })
     .order('revenue_amount', { ascending: false })
     .range(offset, offset + limit - 1)
 
@@ -183,7 +197,13 @@ export function computeStats(summary: SiteSummary[], total: number): Stats {
 
   const totalEarned = summary.reduce((sum, site) => sum + Number(site.revenue_amount ?? 0), 0)
   const newest = [...summary].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
-  const top = summary[0] // already ordered by revenue desc
+
+  // Computed rather than taken from the query's first row: the directory is
+  // ordered by boost now, so trusting the incoming order would crown whoever
+  // paid most rather than whoever earns most.
+  const top = [...summary].sort(
+    (a, b) => Number(b.revenue_amount ?? 0) - Number(a.revenue_amount ?? 0),
+  )[0]
 
   return {
     totalEarned,
@@ -256,5 +276,9 @@ function normalizeSite(row: Record<string, unknown>): Site {
     launched_at: (row.launched_at as string | null) ?? null,
     is_featured: Boolean(row.is_featured),
     created_at: String(row.created_at ?? new Date().toISOString()),
+    clicks: Number(row.clicks ?? 0),
+    bid_amount: Number(row.bid_amount ?? 0),
+    bid_expires_at: (row.bid_expires_at as string | null) ?? null,
+    is_boosted: Boolean(row.is_boosted),
   }
 }
