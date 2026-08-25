@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import LiveVisitors from './LiveVisitors'
+import TrafficBadge from './TrafficBadge'
 import { formatCompact, formatMoney } from '@/lib/format'
 import type { Stats } from '@/lib/types'
 
@@ -27,7 +27,7 @@ export default function Header({ stats, onSubmit }: { stats: Stats; onSubmit: ()
               <span className="hidden sm:inline">{formatMoney(stats.totalEarned)}</span>
             </span>
             <span className="hidden sm:inline"> earned</span>
-            <LiveVisitors />
+            <TrafficBadge />
           </span>
         </div>
 

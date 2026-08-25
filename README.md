@@ -318,13 +318,29 @@ workflow.
 
 ## Analytics
 
-**Datafast** and **Umami**, both as plain script tags in `<head>`. Neither
-feeds anything on the page — they report to their own dashboards.
+**Datafast** owns every site-wide number. The tracking tag is in `<head>`, and
+the header's "N online · N visitors" badge reads `/api/stats`, which calls
+Datafast server-side so `DATAFAST_API_KEY` never reaches a browser. Umami's tag
+is still there as a second recorder; nothing on the page reads from it.
 
-Supabase-side tracking is gone: no `page_views`, no `active_visitors`, no view
-or live-visitor badges. The header carries only the directory's own figures.
-`008_drop_tracking_lower_bid_floor.sql` removes the tables and functions from a
-database that already has them.
+Supabase does not track visitors at all — `active_visitors` and `page_views`
+are gone. `011_drop_visitor_tracking.sql` removes them from a database that
+still has them.
+
+**`sites.clicks` is the exception, and deliberately so.** Per-site click counts
+are the bidding engine's own data, not analytics: Datafast counts events on
+this domain, so getting a number for each of hundreds of listed sites would
+mean a goal configured per site, and it still could not feed ranking or be
+shown to a bidder as what their money bought. That counter stays in Postgres.
+
+### Unverified
+
+**Datafast's API shape could not be checked** — datafa.st is unreachable from
+the build environment. `DATAFAST_API_URL` and the website id are env-overridable
+and the response is parsed leniently across the shapes it might return, so
+correcting it is configuration rather than code. Anything unrecognised becomes
+`null`, which hides that half of the badge rather than inventing a figure.
+`curl /api/stats` reports the exact failure in `reason`.
 
 ## Clicks and paid boosting
 
