@@ -65,15 +65,15 @@ export default function SitesTable({
   return (
     <div className="overflow-hidden rounded-lg border border-line">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] border-collapse text-left">
+        <table className="w-full min-w-full border-collapse text-left sm:min-w-[760px]">
           <thead>
             <tr className="border-b border-line bg-subtle">
-              <th className="label w-12 px-3 py-2.5">#</th>
+              <th className="label w-8 px-2 py-2.5 sm:w-12 sm:px-3">#</th>
               <th className="label px-3 py-2.5">Site</th>
-              <th className="label w-32 px-3 py-2.5">Model</th>
+              <th className="label hidden w-32 px-3 py-2.5 sm:table-cell">Model</th>
               <th className="label w-32 px-3 py-2.5 text-right">Revenue</th>
               <th className="label w-24 px-3 py-2.5 text-right">Trend</th>
-              <th className="label w-28 px-3 py-2.5 text-right">Launched</th>
+              <th className="label hidden w-28 px-3 py-2.5 text-right sm:table-cell">Launched</th>
             </tr>
           </thead>
 
@@ -178,7 +178,7 @@ export default function SitesTable({
                   </button>
                 </td>
 
-                <td className="num px-3 py-3 text-right text-[11.5px] text-muted">
+                <td className="num hidden px-3 py-3 text-right text-[11.5px] text-muted sm:table-cell">
                   {formatMonthYear(site.launched_at)}
                 </td>
               </tr>

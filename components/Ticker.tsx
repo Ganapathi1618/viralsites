@@ -62,14 +62,14 @@ export default function Ticker({
   const items = messages(sitesTracked)
 
   return (
-    <div className="fixed inset-x-0 top-0 z-[60] flex h-9 items-center overflow-hidden bg-ink text-white">
+    <div className="fixed inset-x-0 top-0 z-[60] flex h-8 items-center overflow-hidden bg-ink text-white sm:h-9">
       <div className="marquee flex min-w-full shrink-0 items-center">
         {/* Two identical runs: the second covers the gap as the first exits. */}
         {[0, 1].map((run) => (
           <div key={run} className="flex shrink-0 items-center" aria-hidden={run === 1}>
             {items.map((item) => (
               <span key={item} className="flex shrink-0 items-center whitespace-nowrap">
-                <span className="px-4 text-[12px]">{item}</span>
+                <span className="px-3 text-[11px] sm:px-4 sm:text-[12px]">{item}</span>
                 <span className="text-white/25">·</span>
               </span>
             ))}
@@ -81,7 +81,7 @@ export default function Ticker({
         type="button"
         onClick={dismiss}
         aria-label="Dismiss announcement"
-        className="absolute right-0 top-0 flex h-9 w-9 items-center justify-center bg-ink text-white/50 transition hover:text-white"
+        className="absolute right-0 top-0 flex h-8 w-8 items-center justify-center bg-ink text-white/50 transition hover:text-white sm:h-9 sm:w-9"
       >
         <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />

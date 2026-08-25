@@ -32,11 +32,24 @@ export default function PageShell({
   // The ticker is fixed, so everything below it has to shift by its height.
   // One CSS variable drives the header offset, the content padding and the
   // rails' viewport-height maths, so they can never disagree.
-  const [bannerHeight, setBannerHeight] = useState('2.25rem')
+  // Matches the ticker's height: h-8 on phones, h-9 from sm up.
+  const [bannerHeight, setBannerHeight] = useState('2rem')
 
   // Stable identity so the ticker's mount effect does not re-run on every
   // render of this component.
   const hideBanner = useCallback(() => setBannerHeight('0px'), [])
+
+  // The ticker is h-8 below sm and h-9 above it; keep the offset in step.
+  useEffect(() => {
+    function sync() {
+      setBannerHeight((current) =>
+        current === '0px' ? current : window.innerWidth >= 640 ? '2.25rem' : '2rem',
+      )
+    }
+    sync()
+    window.addEventListener('resize', sync)
+    return () => window.removeEventListener('resize', sync)
+  }, [])
 
   // Dodo and Stripe both send buyers back with a ?checkout= flag.
   const [checkoutState, setCheckoutState] = useState<string | null>(null)
@@ -76,7 +89,7 @@ export default function PageShell({
         </div>
       ) : null}
 
-      <div className="mx-auto max-w-shell px-4 pt-[calc(3.5rem+var(--banner-h,0px))] lg:h-screen">
+      <div className="mx-auto max-w-shell px-3 pt-[calc(3.5rem+var(--banner-h,0px))] sm:px-4 lg:h-screen">
         <div className="lg:flex lg:h-full lg:gap-6">
           <aside className="hidden shrink-0 lg:block lg:h-[calc(100vh-3.5rem-var(--banner-h,0px))] lg:w-[200px] lg:overflow-hidden lg:py-4">
             <LeftSidebar slots={leftSlots} />

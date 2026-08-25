@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { getSupabase } from '@/lib/supabase/client'
 import { siteUrl } from '@/lib/stripe'
-import { DODO_CHECKOUT_URL, MIN_BID_USD } from '@/lib/types'
+import { MIN_BID_USD } from '@/lib/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -106,12 +106,15 @@ export async function POST(request: Request) {
   const productId = process.env.DODO_BID_PRODUCT_ID?.trim()
   const apiBase = (process.env.DODO_API_URL || 'https://live.dodopayments.com').replace(/\/$/, '')
 
+  // Never hand a bidder the fixed sponsor-slot link: it charges that product's
+  // price, not the bid, so a $51 bid would be billed as a $5 sponsor slot.
+  // Refusing is the honest failure.
   if (!apiKey) {
-    return NextResponse.json({
-      url: DODO_CHECKOUT_URL,
-      dynamic: false,
-      reason: 'DODO_API_KEY is not set — falling back to the fixed checkout link',
-    })
+    console.error('[bid/checkout] DODO_API_KEY is not set — cannot price this bid')
+    return NextResponse.json(
+      { error: 'Bidding is not live yet — the payment key is missing. Try again shortly.' },
+      { status: 503 },
+    )
   }
 
   const metadata = {
@@ -149,23 +152,28 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       console.error('[bid/checkout] dodo responded', response.status, JSON.stringify(payload))
-      return NextResponse.json({
-        url: DODO_CHECKOUT_URL,
-        dynamic: false,
-        reason: `dodo ${response.status}`,
-      })
+      return NextResponse.json(
+        { error: 'Could not open checkout for that amount. Try again.' },
+        { status: 502 },
+      )
     }
 
     const checkoutUrl = firstUrl(payload)
     if (!checkoutUrl) {
       console.error('[bid/checkout] no checkout url in response:', JSON.stringify(payload))
-      return NextResponse.json({ url: DODO_CHECKOUT_URL, dynamic: false, reason: 'no url in response' })
+      return NextResponse.json(
+        { error: 'Could not open checkout for that amount. Try again.' },
+        { status: 502 },
+      )
     }
 
     return NextResponse.json({ url: checkoutUrl, dynamic: true })
   } catch (error) {
     console.error('[bid/checkout] request failed:', (error as Error).message)
-    return NextResponse.json({ url: DODO_CHECKOUT_URL, dynamic: false, reason: 'request failed' })
+    return NextResponse.json(
+      { error: 'Could not reach the payment provider. Try again.' },
+      { status: 502 },
+    )
   }
 }
 
