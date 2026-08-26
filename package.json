@@ -11,11 +11,12 @@
     "scrape": "tsx scripts/scrape.ts",
     "test:scraper": "tsx scripts/test-scraper.ts",
     "test:rotation": "tsx scripts/test-rotation.ts",
-    "test": "npm run test:scraper && npm run test:rotation && npm run test:webhook && npm run test:domain && npm run test:datafast",
+    "test": "npm run test:scraper && npm run test:rotation && npm run test:webhook && npm run test:domain && npm run test:datafast && npm run test:dodo",
     "brand": "node scripts/brand/render.js && node scripts/brand/pack-ico.js",
     "test:webhook": "tsx scripts/test-webhook.ts",
     "test:domain": "tsx scripts/test-domain.ts",
-    "test:datafast": "tsx scripts/test-datafast.ts"
+    "test:datafast": "tsx scripts/test-datafast.ts",
+    "test:dodo": "tsx scripts/test-dodo.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

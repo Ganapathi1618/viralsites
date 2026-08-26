@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { describeKeys, firstUrl } from '@/lib/dodo'
 import { normalizeDomain } from '@/lib/domain'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { getSupabase } from '@/lib/supabase/client'
@@ -159,6 +160,11 @@ export async function POST(request: Request) {
       payload = null
     }
 
+    // The key names on their own line. The body above can be truncated or
+    // noisy; this is the one thing needed to fix a rename, so it is logged
+    // where it cannot be cut off.
+    if (payload) console.log('[bid/checkout] dodo response keys:', describeKeys(payload))
+
     if (!response.ok) {
       return NextResponse.json(
         {
@@ -171,10 +177,15 @@ export async function POST(request: Request) {
 
     const checkoutUrl = firstUrl(payload)
     if (!checkoutUrl) {
+      // Names the keys that did come back, so the fix is reading one line
+      // rather than reproducing the payment.
+      const keys = payload ? describeKeys(payload) : 'response was not JSON'
+      console.error('[bid/checkout] no payment link in the response. keys:', keys)
+
       return NextResponse.json(
         {
           error: 'Could not open checkout for that amount.',
-          detail: `dodo ${response.status} but no payment link: ${raw.slice(0, 300)}`,
+          detail: `dodo ${response.status} but no payment link. keys: ${keys}`,
         },
         { status: 502 },
       )
@@ -226,26 +237,4 @@ async function findSite(
   }
 
   return (rows?.[0] as SiteMatch | undefined) ?? null
-}
-
-/** Dodo has used several names for this field; accept whichever comes back. */
-function firstUrl(payload: Record<string, unknown> | null): string | null {
-  if (!payload) return null
-
-  const sources = [payload, payload.data as Record<string, unknown> | undefined].filter(
-    Boolean,
-  ) as Record<string, unknown>[]
-
-  // payment_link first: that is what POST /payments returns. The rest cover
-  // the other names Dodo has used, so a rename is not an outage.
-  const keys = ['payment_link', 'checkout_url', 'payment_url', 'session_url', 'url', 'link']
-
-  for (const source of sources) {
-    for (const key of keys) {
-      const value = source[key]
-      if (typeof value === 'string' && /^https?:\/\//.test(value)) return value
-    }
-  }
-
-  return null
 }
