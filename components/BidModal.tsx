@@ -76,12 +76,12 @@ export default function BidModal({
         <div className="rounded-lg border border-line bg-subtle p-3.5">
           {topBid > 0 ? (
             <>
-              <p className="label">Current #1 bid</p>
+              <p className="label">Current bid</p>
               <p className="num mt-1 text-[24px] font-bold leading-none text-ink">
                 {formatMoney(topBid)}
               </p>
               <p className="mt-1.5 text-[11.5px] text-body">
-                Bid {formatMoney(floor)} to take the top spot.
+                Bid {formatMoney(floor)} to claim this spot.
               </p>
             </>
           ) : (
@@ -105,17 +105,35 @@ export default function BidModal({
           <label className="field-label" htmlFor="bid-amount">
             Your bid (USD)
           </label>
-          <input
-            id="bid-amount"
-            name="amount"
-            type="number"
-            min={floor}
-            step="1"
-            required
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-            className="field font-mono text-[16px] font-semibold"
-          />
+          <div className="flex items-stretch gap-2">
+            <button
+              type="button"
+              aria-label="Lower the bid"
+              onClick={() => setAmount(String(Math.max(floor, (Number(amount) || floor) - 1)))}
+              className="w-11 shrink-0 rounded-lg border border-line text-[18px] font-semibold text-body transition hover:border-[#dcdcdc] hover:text-ink"
+            >
+              −
+            </button>
+            <input
+              id="bid-amount"
+              name="amount"
+              type="number"
+              min={floor}
+              step="1"
+              required
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              className="field text-center font-mono text-[18px] font-bold"
+            />
+            <button
+              type="button"
+              aria-label="Raise the bid"
+              onClick={() => setAmount(String((Number(amount) || floor) + 1))}
+              className="w-11 shrink-0 rounded-lg border border-line text-[18px] font-semibold text-body transition hover:border-[#dcdcdc] hover:text-ink"
+            >
+              +
+            </button>
+          </div>
           {tooLow ? (
             <p className="mt-1 text-[11px] text-down">Minimum is {formatMoney(floor)}.</p>
           ) : (
@@ -153,8 +171,8 @@ export default function BidModal({
           {status === 'saving'
             ? 'Recording your bid…'
             : status === 'redirecting'
-              ? 'Opening Dodo…'
-              : 'Take the top spot →'}
+              ? 'Opening checkout…'
+              : 'Bid now →'}
         </button>
 
         <p className="text-center text-[11px] leading-relaxed text-muted">

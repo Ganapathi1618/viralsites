@@ -1,13 +1,13 @@
 'use client'
 
-import { formatMoney, formatMonthYear, hostname } from '@/lib/format'
+import { formatAgo, formatMoney, hostname } from '@/lib/format'
 import { BID_INCREMENT_USD, MIN_BID_USD, type Site } from '@/lib/types'
-import { Favicon, ModelTag, TrendCell, VerifiedMark } from './ui'
+import { Favicon, VerifiedMark } from './ui'
 
 /**
- * Records the click, then opens the site. `keepalive` lets the request survive
- * the tab losing focus, and nothing is awaited — a slow counter must never
- * delay the link the visitor actually asked for.
+ * Records the click, then lets the link open. `keepalive` survives the tab
+ * losing focus, and nothing is awaited — counting must never delay the
+ * navigation the visitor asked for.
  */
 function trackClick(url: string) {
   try {
@@ -22,7 +22,21 @@ function trackClick(url: string) {
   }
 }
 
-const MEDALS = ['🥇', '🥈', '🥉']
+function RankBadge({ rank, boosted }: { rank: number; boosted: boolean }) {
+  const tone = boosted
+    ? 'bg-brand text-white'
+    : rank <= 3
+      ? 'bg-[#e9e9e9] text-body'
+      : 'bg-fill text-muted'
+
+  return (
+    <span
+      className={`num flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${tone}`}
+    >
+      {rank}
+    </span>
+  )
+}
 
 export default function SitesTable({
   sites,
@@ -41,12 +55,11 @@ export default function SitesTable({
   onSelect: (site: Site) => void
   onBid: (site: Site) => void
 }) {
-  // What the next bid costs anywhere on the board, shown on every row so the
-  // price of the top spot is never a click away.
+  // What the next bid costs anywhere on the board, so the price of the top
+  // spot is never a click away.
   const topBid = Math.max(0, ...sites.map((site) => (site.is_boosted ? site.bid_amount : 0)))
   const nextBid = Math.max(MIN_BID_USD, topBid + BID_INCREMENT_USD)
-  const shown = sites
-  const hasMore = sites.length < total
+
   if (sites.length === 0) {
     return (
       <div className="rounded-lg border border-line px-6 py-14 text-center">
@@ -64,144 +77,94 @@ export default function SitesTable({
 
   return (
     <div className="overflow-hidden rounded-lg border border-line">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-full border-collapse text-left sm:min-w-[760px]">
-          <thead>
-            <tr className="border-b border-line bg-subtle">
-              <th className="label w-8 px-2 py-2.5 sm:w-12 sm:px-3">#</th>
-              <th className="label px-3 py-2.5">Site</th>
-              <th className="label hidden w-32 px-3 py-2.5 sm:table-cell">Model</th>
-              <th className="label w-32 px-3 py-2.5 text-right">Revenue</th>
-              <th className="label w-24 px-3 py-2.5 text-right">Trend</th>
-              <th className="label hidden w-28 px-3 py-2.5 text-right sm:table-cell">Launched</th>
-            </tr>
-          </thead>
+      <ul>
+        {sites.map((site, index) => {
+          const rank = index + 1
 
-          <tbody>
-            {shown.map((site, index) => (
-              <tr
-                key={site.id}
-                onClick={() => onSelect(site)}
-                tabIndex={0}
-                role="button"
-                aria-label={`Open details for ${site.name}`}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    onSelect(site)
-                  }
-                }}
-                className="group cursor-pointer border-b border-line last:border-0 transition hover:bg-subtle focus:bg-subtle focus:outline-none"
-              >
-                <td className="num px-3 py-3 align-middle text-[13px] text-muted">
-                  {index < 3 ? <span className="text-[15px]">{MEDALS[index]}</span> : index + 1}
-                </td>
+          return (
+            <li
+              key={site.id}
+              onClick={() => onBid(site)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  onBid(site)
+                }
+              }}
+              className="group flex cursor-pointer items-center gap-2.5 border-b border-line px-3 py-3 transition last:border-0 hover:bg-subtle focus:bg-subtle focus:outline-none sm:gap-3 sm:px-4"
+            >
+              <RankBadge rank={rank} boosted={site.is_boosted} />
+              <Favicon name={site.name} size={30} />
 
-                <td className="px-3 py-3">
-                  <div className="flex items-start gap-2.5">
-                    <Favicon name={site.name} />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <a
-                          href={site.url}
-                          target="_blank"
-                          rel="noopener noreferrer nofollow"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            trackClick(site.url)
-                          }}
-                          className="truncate text-[13.5px] font-semibold text-ink hover:text-brand group-hover:text-brand"
-                        >
-                          {site.name}
-                        </a>
-                        {site.revenue_verified ? <VerifiedMark /> : null}
-                        {site.is_boosted ? (
-                          <span className="inline-flex items-center rounded bg-[#ea580c]/[0.1] px-1.5 py-[2px] font-mono text-[9.5px] font-semibold tracking-wide text-[#ea580c]">
-                            🔥 BOOSTED
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-0.5 line-clamp-1 max-w-md text-[12px] text-body">
-                        {site.description}
-                      </p>
-                      <span className="num mt-0.5 block text-[10.5px] text-muted">
-                        {hostname(site.url)}
-                      </span>
-                    </div>
-                  </div>
-                </td>
-
-                <td className="px-3 py-3">
-                  <ModelTag model={site.model_type} />
-                </td>
-
-                <td className="px-3 py-3 text-right">
-                  <span className="num block text-[13.5px] font-bold text-money">
-                    {formatMoney(site.revenue_amount)}
-                  </span>
-                  <span className="num mt-0.5 block text-[10.5px] text-muted">
-                    {site.clicks.toLocaleString('en-US')} clicks
-                  </span>
-                  <span className="mt-0.5 inline-flex items-center justify-end gap-1 text-[10.5px] text-muted">
-                    {site.revenue_verified ? 'verified' : 'estimated'}
-                    {site.revenue_verified && site.revenue_source_url ? (
-                      <a
-                        href={site.revenue_source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(event) => event.stopPropagation()}
-                        aria-label="Open the public post this figure came from"
-                        className="text-brand hover:underline"
-                      >
-                        ↗
-                      </a>
-                    ) : null}
-                  </span>
-                </td>
-
-                <td className="px-3 py-3 text-right align-top">
-                  <TrendCell percent={site.trend_percent} />
-                  {site.is_boosted ? (
-                    <span className="num mt-0.5 block text-[10px] font-semibold text-[#ea580c]">
-                      bid {formatMoney(site.bid_amount)}
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {/* The link opens the site; the rest of the row bids. */}
+                  <a
+                    href={site.url}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
                     onClick={(event) => {
                       event.stopPropagation()
-                      onBid(site)
+                      trackClick(site.url)
                     }}
-                    className="num mt-1 whitespace-nowrap rounded border border-line px-1.5 py-[3px] text-[10px] font-semibold text-muted transition hover:border-[#ea580c]/40 hover:text-[#ea580c]"
+                    className="truncate text-[13.5px] font-semibold text-ink hover:text-brand"
                   >
-                    Bid ↑ {formatMoney(nextBid)}
-                  </button>
-                </td>
+                    {site.name}
+                  </a>
+                  {site.revenue_verified ? <VerifiedMark /> : null}
+                  {site.is_boosted ? (
+                    <span className="rounded bg-[#ea580c]/[0.1] px-1.5 py-[2px] font-mono text-[9.5px] font-semibold tracking-wide text-[#ea580c]">
+                      🔥 BOOSTED
+                    </span>
+                  ) : null}
+                </div>
 
-                <td className="num hidden px-3 py-3 text-right text-[11.5px] text-muted sm:table-cell">
-                  {formatMonthYear(site.launched_at)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                <p className="mt-0.5 line-clamp-1 text-[12px] text-body">{site.description}</p>
+
+                <div className="num mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10.5px] text-muted">
+                  <span className="truncate">{hostname(site.url)}</span>
+                  <span>{formatAgo(site.created_at)}</span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-money" />
+                    {site.clicks.toLocaleString('en-US')} clicks
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span
+                  className={`num text-[14px] font-bold ${site.is_boosted ? 'text-[#ea580c]' : 'text-money'}`}
+                >
+                  {site.is_boosted ? formatMoney(site.bid_amount) : formatMoney(site.revenue_amount)}
+                </span>
+                <span
+                  className={`num whitespace-nowrap rounded px-1.5 py-[3px] text-[10px] font-semibold ${
+                    site.is_boosted
+                      ? 'bg-brand/[0.1] text-brand'
+                      : 'border border-line text-muted group-hover:border-brand/40 group-hover:text-brand'
+                  }`}
+                >
+                  {site.is_boosted ? `claim #${rank}` : `bid ↑ ${formatMoney(nextBid)}`}
+                </span>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
 
       <div className="flex flex-col items-center gap-2.5 border-t border-line bg-subtle py-4">
         <p className="num text-[11.5px] text-muted">
-          Showing {shown.length} of {total} {total === 1 ? 'site' : 'sites'}
-          {/* Say so explicitly: a missing button otherwise reads as broken. */}
-          {hasMore ? null : <span className="ml-1.5">· that&apos;s all of them</span>}
+          Showing {sites.length} of {total} {total === 1 ? 'site' : 'sites'}
+          {sites.length < total ? null : <span className="ml-1.5">· that&apos;s all of them</span>}
         </p>
 
         {error ? <p className="text-[11.5px] text-down">{error}</p> : null}
 
-        {hasMore ? (
+        {sites.length < total ? (
           <button type="button" onClick={onLoadMore} disabled={loading} className="btn-ghost">
             {loading ? 'Loading…' : 'Load more'}
-            {loading ? null : (
-              <span className="num text-[11px] text-muted">+{Math.min(10, total - shown.length)}</span>
-            )}
           </button>
         ) : null}
       </div>

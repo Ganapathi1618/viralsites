@@ -1,14 +1,21 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatMoney } from '@/lib/format'
 
-type Stats = { online: number | null; visitors: number | null }
+type Stats = { made: number | null; watching: number | null; visitors: number | null }
+
+const SHARE_URL = 'https://datafa.st/share/6a8dcd957ec703b02ac6cb54'
+
+function Dot({ color }: { color: string }) {
+  return <span className={`h-1.5 w-1.5 shrink-0 animate-pulse-dot rounded-full ${color}`} />
+}
 
 /**
- * "N online · N visitors since launch", from Datafast via /api/stats.
+ * Live figures from the Datafast share page, refreshed every 30 seconds.
  *
- * Renders nothing until real figures arrive, so a deployment without a
- * Datafast API key shows no empty chrome rather than a badge full of zeroes.
+ * Each badge appears only once its number arrives, so a parse that finds two
+ * of three still shows those two rather than blanking the row.
  */
 export default function TrafficBadge() {
   const [stats, setStats] = useState<Stats | null>(null)
@@ -34,27 +41,43 @@ export default function TrafficBadge() {
     }
   }, [])
 
-  const online = stats?.online
-  const visitors = stats?.visitors
-
-  if (typeof online !== 'number' && typeof visitors !== 'number') return null
+  const { made, watching, visitors } = stats ?? {}
+  if (made == null && watching == null && visitors == null) return null
 
   return (
-    <>
-      {typeof online === 'number' ? (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="mx-1 text-muted">·</span>
-          <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-money" />
-          <span className="font-semibold text-money">{online}</span> online
+    <div className="flex min-w-0 items-center gap-2 overflow-hidden sm:gap-3">
+      {made != null ? (
+        <span className="num flex shrink-0 items-center gap-1.5 text-[11px] sm:text-[12px]">
+          <Dot color="bg-money" />
+          <span className="font-semibold text-money">{formatMoney(made)}</span>
+          <span className="hidden text-muted sm:inline">made</span>
         </span>
       ) : null}
 
-      {typeof visitors === 'number' ? (
-        <span className="hidden sm:inline">
-          <span className="mx-1.5 text-muted">·</span>
-          <span className="font-semibold text-ink">{visitors.toLocaleString('en-US')}</span> visitors
+      {watching != null ? (
+        <span className="num flex shrink-0 items-center gap-1.5 text-[11px] sm:text-[12px]">
+          <Dot color="bg-money" />
+          <span className="font-semibold text-ink">{watching}</span>
+          <span className="text-muted">watching</span>
         </span>
       ) : null}
-    </>
+
+      {visitors != null ? (
+        <span className="num hidden shrink-0 items-center gap-1.5 text-[12px] md:flex">
+          <Dot color="bg-brand" />
+          <span className="font-semibold text-ink">{visitors.toLocaleString('en-US')}</span>
+          <span className="text-muted">visitors</span>
+        </span>
+      ) : null}
+
+      <a
+        href={SHARE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hidden shrink-0 text-[11px] text-muted transition hover:text-brand lg:inline"
+      >
+        Full stats ↗
+      </a>
+    </div>
   )
 }

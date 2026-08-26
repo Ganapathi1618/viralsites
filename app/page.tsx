@@ -13,6 +13,7 @@ export default async function HomePage() {
   return (
     <PageShell stats={stats} leftSlots={leftSlots} rightSlots={rightSlots}>
       <DirectoryView
+        adSlots={[...leftSlots, ...rightSlots]}
         initialSites={sites}
         total={total}
         topEarners={topEarners}

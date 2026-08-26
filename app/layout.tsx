@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
-import { umamiScriptSrc, umamiWebsiteId } from '@/lib/analytics'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
@@ -60,7 +59,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${mono.variable}`}>
       <head>
-        <script defer src={umamiScriptSrc()} data-website-id={umamiWebsiteId()} />
         <script
           defer
           data-website-id="dfid_vGpUzorjuNOwlhQikL4ui"

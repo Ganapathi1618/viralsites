@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import BidModal from './BidModal'
+import MobileAdGrid from './MobileAdGrid'
 import BoostedStrip from './BoostedStrip'
 import SiteDrawer from './SiteDrawer'
 import SitesTable from './SitesTable'
 import StatsBar from './StatsBar'
 import TopEarnersRow from './TopEarnersRow'
 import { PAGE_SIZE, type SiteSummary } from '@/lib/data'
-import type { Site, Stats } from '@/lib/types'
+import type { AdSlot, Site, Stats } from '@/lib/types'
 
 /** Middle column of the homepage. */
 export default function DirectoryView({
@@ -18,6 +19,7 @@ export default function DirectoryView({
   stats,
   isLive,
   error,
+  adSlots = [],
 }: {
   initialSites: Site[]
   total: number
@@ -25,6 +27,8 @@ export default function DirectoryView({
   stats: Stats
   isLive: boolean
   error?: string
+  /** All six slots, for the grid shown where the rails are hidden. */
+  adSlots?: AdSlot[]
 }) {
   const [sites, setSites] = useState<Site[]>(initialSites)
   const [drawerSite, setDrawerSite] = useState<Site | null>(null)
@@ -70,6 +74,8 @@ export default function DirectoryView({
           </span>
         </p>
       ) : null}
+
+      <MobileAdGrid slots={adSlots} />
 
       <BoostedStrip sites={sites.filter((site) => site.is_boosted)} onOutbid={setBidSite} />
 

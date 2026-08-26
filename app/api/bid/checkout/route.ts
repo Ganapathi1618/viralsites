@@ -14,28 +14,25 @@ export const dynamic = 'force-dynamic'
  * `type: 'bid'` and `site_url` back and applies the boost to that site, rather
  * than guessing which pending row a payment belongs to.
  *
- * NOTE: Dodo's API shape could not be verified while this was written — the
- * docs were unreachable from the build environment. The request below follows
- * their published pattern (bearer key, amount in minor units, metadata,
- * return_url) and every part of it is overridable by env var. If the call
- * fails for any reason the response falls back to the fixed checkout link, so
- * a bidder is never left staring at an error; the fallback is flagged in the
- * payload so the caller knows the amount will not match.
+ * The request body follows Dodo's documented `POST /payments` shape. Their
+ * full response is logged, and its status and body are carried back to the
+ * browser in `detail`, because this is the one call whose exact answer matters
+ * and it cannot be exercised from the build environment.
  */
 export async function POST(request: Request) {
-  let body: { site_url?: unknown; bid_amount?: unknown; bidder_email?: unknown }
+  let input: { site_url?: unknown; bid_amount?: unknown; bidder_email?: unknown }
   try {
-    body = (await request.json()) as typeof body
+    input = (await request.json()) as typeof input
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  const bidAmount = Number(body.bid_amount)
-  const email = typeof body.bidder_email === 'string' ? body.bidder_email.trim() : ''
+  const bidAmount = Number(input.bid_amount)
+  const email = typeof input.bidder_email === 'string' ? input.bidder_email.trim() : ''
 
   let url: string
   try {
-    const parsed = new URL(String(body.site_url ?? ''))
+    const parsed = new URL(String(input.site_url ?? ''))
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('scheme')
     url = parsed.toString()
   } catch {
@@ -107,58 +104,65 @@ export async function POST(request: Request) {
   const apiBase = (process.env.DODO_API_URL || 'https://live.dodopayments.com').replace(/\/$/, '')
 
   // Never hand a bidder the fixed sponsor-slot link: it charges that product's
-  // price, not the bid, so a $51 bid would be billed as a $5 sponsor slot.
-  // Refusing is the honest failure.
+  // price, not the bid. Refusing is the honest failure.
   if (!apiKey) {
     console.error('[bid/checkout] DODO_API_KEY is not set — cannot price this bid')
     return NextResponse.json(
-      { error: 'Bidding is not live yet — the payment key is missing. Try again shortly.' },
+      { error: 'Bidding is not live yet — the payment key is missing.' },
       { status: 503 },
     )
   }
 
-  const metadata = {
-    type: 'bid',
-    site_url: url,
-    bid_amount: String(bidAmount),
+  if (!productId) {
+    console.error('[bid/checkout] DODO_BID_PRODUCT_ID is not set')
+    return NextResponse.json(
+      { error: 'Bidding is not live yet — the product is not configured.' },
+      { status: 503 },
+    )
+  }
+
+  const body = {
+    billing: { city: '', country: 'US', state: '', street: '', zipcode: '' },
+    customer: { email, name: '' },
+    payment_link: true,
+    product_cart: [{ product_id: productId, quantity: 1 }],
+    metadata: {
+      site_url: url,
+      // Metadata values must be strings; the webhook parses this back.
+      bid_amount: String(bidAmount),
+      type: 'bid',
+    },
+    return_url: `${siteUrl()}?boosted=true`,
   }
 
   try {
     const response = await fetch(`${apiBase}/payments`, {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${apiKey}`,
-        'content-type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
       },
-      signal: AbortSignal.timeout(10_000),
-      body: JSON.stringify({
-        payment_link: true,
-        // Amounts are sent in minor units, as most processors expect.
-        amount: Math.round(bidAmount * 100),
-        currency: 'USD',
-        product_id: productId || undefined,
-        product_cart: productId
-          ? [{ product_id: productId, quantity: 1, amount: Math.round(bidAmount * 100) }]
-          : undefined,
-        billing_currency: 'USD',
-        metadata,
-        customer: email ? { email } : undefined,
-        return_url: `${siteUrl()}/?boosted=true`,
-        description: `Boost ${url} to the top of viralsites.fyi`,
-      }),
+      signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify(body),
     })
 
-    const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null
+    const raw = await response.text()
+    // Logged whole: this is the one call whose exact answer matters, and the
+    // shape has been guessed at more than once.
+    console.log('[bid/checkout] dodo', response.status, raw.slice(0, 1000))
+
+    let payload: Record<string, unknown> | null = null
+    try {
+      payload = JSON.parse(raw) as Record<string, unknown>
+    } catch {
+      payload = null
+    }
 
     if (!response.ok) {
-      const detail = JSON.stringify(payload).slice(0, 300)
-      console.error('[bid/checkout] dodo responded', response.status, detail)
       return NextResponse.json(
         {
-          error: 'Could not open checkout for that amount. Try again.',
-          // Carried through so a failure can be diagnosed from the browser
-          // rather than only from the deployment's logs.
-          detail: `dodo ${response.status}: ${detail}`,
+          error: 'Could not open checkout for that amount.',
+          detail: `dodo ${response.status}: ${raw.slice(0, 300)}`,
         },
         { status: 502 },
       )
@@ -166,23 +170,21 @@ export async function POST(request: Request) {
 
     const checkoutUrl = firstUrl(payload)
     if (!checkoutUrl) {
-      const detail = JSON.stringify(payload).slice(0, 300)
-      console.error('[bid/checkout] no checkout url in response:', detail)
       return NextResponse.json(
         {
-          error: 'Could not open checkout for that amount. Try again.',
-          detail: `dodo 200 but no url: ${detail}`,
+          error: 'Could not open checkout for that amount.',
+          detail: `dodo 200 but no payment link: ${raw.slice(0, 300)}`,
         },
         { status: 502 },
       )
     }
 
-    return NextResponse.json({ url: checkoutUrl, dynamic: true })
+    return NextResponse.json({ url: checkoutUrl })
   } catch (error) {
     console.error('[bid/checkout] request failed:', (error as Error).message)
     return NextResponse.json(
       {
-        error: 'Could not reach the payment provider. Try again.',
+        error: 'Could not reach the payment provider.',
         detail: `request failed: ${(error as Error).message}`,
       },
       { status: 502 },

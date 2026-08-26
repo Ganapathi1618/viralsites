@@ -47,7 +47,7 @@ export async function POST(request: Request) {
           .from('ad_slots')
           .update({
             is_active: true,
-            company_name: session.metadata?.company_name ?? 'Reserved',
+            company_name: session.metadata?.company_name ?? null,
             company_url: session.metadata?.company_url ?? null,
             one_liner: session.metadata?.one_liner ?? null,
             stripe_subscription_id: idOf(session.subscription),
