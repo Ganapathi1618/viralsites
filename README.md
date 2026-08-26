@@ -313,24 +313,44 @@ workflow.
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | no | Only if you replace hosted Checkout with Stripe.js |
 | `NEXT_PUBLIC_DODO_CHECKOUT_URL` | no | Hosted Dodo checkout; falls back to the current link |
 | `NEXT_PUBLIC_SITE_URL` | recommended | Absolute URLs for redirects and metadata |
-| `CRON_SECRET` | yes in prod | Guards `/api/cron/scrape` |
+| `DATAFAST_API_KEY` | for header stats | Website settings → API on datafa.st; server-only |
+| `DATAFAST_API_URL` | no | Defaults to `https://datafa.st/api/v1` |
+| `CRON_SECRET` | yes in prod | Guards `/api/cron/scrape` and `/api/diagnostics` |
 | `SCRAPER_SOURCE_URLS` | no | Comma-separated; defaults to outbid.lol,outbid.fyi |
 
 ## Analytics
 
-**Datafast is the only analytics, and it is client-side only.** The tag sits in
-`<head>` (`app/layout.tsx`); the dashboard lives on Datafast's own share page,
-which the header links to as "Full stats ↗". Nothing on this site reads traffic
-numbers back.
+**Datafast is the only analytics.** The tag sits in `<head>`
+(`app/layout.tsx`) and the header's `N online · N visitors · N views` figures
+are read back from [Datafast's API](https://datafa.st/docs/api-introduction)
+by `/api/stats`, cached 30 seconds, polled by `TrafficBadge` every 30.
 
-That is a deliberate retreat. An earlier version scraped the share page from
-`/api/stats` to print "$X made · N watching · N visitors" in the header. The
-share page renders its figures in the browser, so the HTML a server fetch gets
-back contains no numbers — the badges silently showed nothing, which is the
-best case. The worst case is a regex that matches something and prints a number
-nobody can vouch for. There is no public Datafast read API to replace it with,
-so the header shows the one number this app owns — the site count from
-Supabase — and links out for the rest.
+`DATAFAST_API_KEY` is server-only and deliberately has no `NEXT_PUBLIC_`
+prefix: it can read every visitor record for this site. Without it the route
+answers with nulls and a `reason`, and the header shows the site count and the
+"Full stats ↗" link alone — never a zero standing in for a number nobody
+measured.
+
+An earlier version tried to scrape the public share page instead. That page
+renders its figures in the browser, so a server fetch got markup with no
+numbers in it and every badge silently vanished. The share page is a dashboard
+for humans; the API is the contract. It is still what "Full stats ↗" opens.
+
+### Field names are matched, not assumed
+
+datafa.st is unreachable from the environment this was written in, so the exact
+response shape could not be confirmed. `lib/datafast.ts` tries a small set of
+documented paths in parallel, takes the first that answers, and searches the
+payload breadth-first for any of several plausible key names
+(`visitors`, `uniqueVisitors`, `unique_visitors`, …). Breadth-first matters: a
+window total at the top level has to win over the same key inside a per-day
+breakdown, or the header would report one day as the month.
+
+`scripts/test-datafast.ts` pins both failure modes — reading a daily figure as
+the total, and inventing a number where the payload has none.
+`GET /api/diagnostics?key=$CRON_SECRET` returns the raw body of every candidate
+path plus what the header currently resolves to, so an unexpected shape is one
+request away from being fixed rather than a guessing loop.
 
 Supabase does not track visitors at all — `active_visitors` and `page_views`
 are gone. `011_drop_visitor_tracking.sql` removes them from a database that

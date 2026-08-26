@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server'
+import { candidateUrls, readTraffic } from '@/lib/datafast'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 /**
- * Probes the Dodo API and reports exactly what it answers.
+ * Probes the Dodo and Datafast APIs and reports exactly what they answer.
  *
- * Dodo cannot be reached from the build environment, so this runs the same
- * calls from the deployment — which can — and reports the status and a short
- * body for each, so a failing checkout can be diagnosed in one request instead
- * of a guessing loop. Analytics is not probed: Datafast is a client-side tag
- * with no server call to check.
+ * Neither host is reachable from the build environment, so this runs the same
+ * calls from the deployment — which can reach them — and reports the status
+ * and a short body for each, so a failing checkout or a blank header stat can
+ * be diagnosed in one request instead of a guessing loop.
  *
  * Guarded by CRON_SECRET: it reveals which endpoints exist and the providers'
  * error text, which is not for the public. Secrets themselves are never
@@ -29,7 +29,10 @@ export async function GET(request: Request) {
   const productId = process.env.DODO_BID_PRODUCT_ID?.trim()
   const apiBase = (process.env.DODO_API_URL || 'https://live.dodopayments.com').replace(/\/$/, '')
 
+  const datafastKey = process.env.DATAFAST_API_KEY?.trim()
+
   const env = {
+    DATAFAST_API_KEY: describe(datafastKey),
     DODO_API_KEY: describe(dodoKey),
     DODO_BID_PRODUCT_ID: describe(productId),
     DODO_WEBHOOK_SECRET: describe(process.env.DODO_WEBHOOK_SECRET),
@@ -53,8 +56,22 @@ export async function GET(request: Request) {
       ? await probeCheckout(apiBase, dodoKey, productId)
       : 'DODO_API_KEY or DODO_BID_PRODUCT_ID not set'
 
+  // Every analytics path the header could read from, plus what the header
+  // actually resolves to right now. One request says whether a blank badge is
+  // a missing key, a wrong path, or a field name we did not expect.
+  const urls = candidateUrls()
+  const datafast = datafastKey
+    ? {
+        parsed: await readTraffic(datafastKey),
+        raw: await probeAll([...urls.overview, ...urls.realtime], {
+          authorization: `Bearer ${datafastKey}`,
+          accept: 'application/json',
+        }),
+      }
+    : 'DATAFAST_API_KEY not set'
+
   return NextResponse.json(
-    { env, dodo, checkoutSession },
+    { env, datafast, dodo, checkoutSession },
     { headers: { 'cache-control': 'no-store' } },
   )
 }
@@ -100,7 +117,7 @@ async function probe(url: string, headers: Record<string, string>) {
       cache: 'no-store',
       signal: AbortSignal.timeout(8_000),
     })
-    const body = (await response.text()).slice(0, 300)
+    const body = (await response.text()).slice(0, 700)
     return { status: response.status, body }
   } catch (error) {
     return { status: 0, body: `request failed: ${(error as Error).message}` }

@@ -1,15 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { DATAFAST_SHARE_URL, type Stats } from '@/lib/types'
+import TrafficBadge from './TrafficBadge'
+import type { Stats } from '@/lib/types'
 
 /**
- * Two facts and two actions, nothing else.
+ * The site count from Supabase, live traffic from Datafast, two actions.
  *
- * The count is the directory's own, straight from Supabase. Traffic numbers
- * are not shown here at all: Datafast renders its share page in the browser,
- * so any figure printed here would have to be scraped or invented — the link
- * sends people to the real dashboard instead.
+ * The count is rendered on the server because it comes with the page; the
+ * traffic figures poll from the client, and each one only appears once its
+ * number actually arrives — a missing figure leaves a gap rather than a zero.
  */
 export default function Header({ stats, onSubmit }: { stats: Stats; onSubmit: () => void }) {
   return (
@@ -29,14 +29,7 @@ export default function Header({ stats, onSubmit }: { stats: Stats; onSubmit: ()
             </span>
           ) : null}
 
-          <a
-            href={DATAFAST_SHARE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 whitespace-nowrap text-[10.5px] text-muted transition hover:text-brand sm:text-[11px]"
-          >
-            Full stats ↗
-          </a>
+          <TrafficBadge />
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
