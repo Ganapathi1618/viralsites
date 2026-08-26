@@ -318,10 +318,19 @@ workflow.
 
 ## Analytics
 
-**Datafast** owns every site-wide number. The tracking tag is in `<head>`, and
-the header's "N online · N visitors" badge reads `/api/stats`, which calls
-Datafast server-side so `DATAFAST_API_KEY` never reaches a browser. Umami's tag
-is still there as a second recorder; nothing on the page reads from it.
+**Datafast is the only analytics, and it is client-side only.** The tag sits in
+`<head>` (`app/layout.tsx`); the dashboard lives on Datafast's own share page,
+which the header links to as "Full stats ↗". Nothing on this site reads traffic
+numbers back.
+
+That is a deliberate retreat. An earlier version scraped the share page from
+`/api/stats` to print "$X made · N watching · N visitors" in the header. The
+share page renders its figures in the browser, so the HTML a server fetch gets
+back contains no numbers — the badges silently showed nothing, which is the
+best case. The worst case is a regex that matches something and prints a number
+nobody can vouch for. There is no public Datafast read API to replace it with,
+so the header shows the one number this app owns — the site count from
+Supabase — and links out for the rest.
 
 Supabase does not track visitors at all — `active_visitors` and `page_views`
 are gone. `011_drop_visitor_tracking.sql` removes them from a database that
@@ -332,15 +341,6 @@ are the bidding engine's own data, not analytics: Datafast counts events on
 this domain, so getting a number for each of hundreds of listed sites would
 mean a goal configured per site, and it still could not feed ranking or be
 shown to a bidder as what their money bought. That counter stays in Postgres.
-
-### Unverified
-
-**Datafast's API shape could not be checked** — datafa.st is unreachable from
-the build environment. `DATAFAST_API_URL` and the website id are env-overridable
-and the response is parsed leniently across the shapes it might return, so
-correcting it is configuration rather than code. Anything unrecognised becomes
-`null`, which hides that half of the badge rather than inventing a figure.
-`curl /api/stats` reports the exact failure in `reason`.
 
 ## Clicks and paid boosting
 
@@ -367,7 +367,16 @@ Bidders type their site every way imaginable — `outbid.lol`,
 `https://outbid.lol`, `https://www.outbid.lol/`. `normalize_domain()` reduces
 all of those to `outbid.lol`, and lookups, click counting and boosting all
 match on it. The column is indexed on that expression, so it stays a single
-index scan. This is what "that site is not listed" used to be.
+index scan. `normalizeDomain()` in `lib/domain.ts` does the same reduction in
+JavaScript, so the route, the webhook and Postgres always agree on what counts
+as the same site.
+
+**A bid is never refused for not matching a row.** The lookup exists to record
+the intent and to price the floor; if it comes up empty — an unlisted site, a
+missing migration, an outage — checkout still opens, because the webhook
+re-matches the domain when the payment lands and is the authority on what gets
+boosted. Refusing money over a failed `select` is how "that site is not listed"
+used to happen.
 
 `/api/bid/checkout` records the intent, then opens a Dodo checkout **for the
 exact bid amount**, carrying `{type: 'bid', site_url, bid_amount}` in metadata.
@@ -380,17 +389,35 @@ to do.
 endpoint. A bid must clear $1 and beat the highest live bid, checked
 server-side as well as in the modal.
 
-### The one unverified piece
+### The Dodo call
 
-**Dodo's API shape could not be checked while this was written** — their docs
-are unreachable from the build environment. The request follows their published
-pattern (bearer key, minor units, metadata, return_url) and every part is
-overridable: `DODO_API_URL`, `DODO_BID_PRODUCT_ID`, `DODO_API_KEY`.
+`POST https://live.dodopayments.com/checkout/sessions`, bearer key, with:
 
-If the call fails for any reason — wrong shape, missing key, network — the
-route falls back to the fixed checkout link and flags `dynamic: false` in the
-response, so a bidder never hits a dead end. Watch the server log on the first
-real bid: it prints Dodo's exact response when the call is rejected.
+```json
+{
+  "product_cart": [{ "product_id": "…", "quantity": 1, "amount": 1200 }],
+  "payment_link": true,
+  "customer": { "email": "…" },
+  "metadata": { "site_url": "…", "bid_amount": "12", "type": "bid" },
+  "return_url": "https://viralsites.fyi/?boosted=true"
+}
+```
+
+`amount` is in cents and is what makes one product charge any bid: the SKU
+comes from `DODO_BID_PRODUCT_ID`, the price comes from the cart line. The
+response's checkout URL (`checkout.dodopayments.com/session/cks_…`) is returned
+as `url` and the browser is sent there.
+
+**It never falls back to the fixed sponsor link.** That link charges the
+sponsor product's price, not the bid, so a missing `DODO_API_KEY` or
+`DODO_BID_PRODUCT_ID` returns 503 and says which one is missing. Dodo's full
+response is logged on every attempt, and its status and body come back to the
+modal in `detail` — so a rejected bid says what Dodo actually objected to
+rather than "something went wrong".
+
+`GET /api/diagnostics?key=$CRON_SECRET` runs the same call against the live
+product and reports the raw answer, without needing anyone to attempt a real
+bid.
 
 ## Design
 

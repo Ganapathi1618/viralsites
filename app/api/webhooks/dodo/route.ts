@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { normalizeDomain } from '@/lib/domain'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { verifyWebhookSignature } from '@/lib/webhook-signature'
 
@@ -77,26 +78,26 @@ export async function POST(request: Request) {
     // guess: boost exactly the site that was paid for and leave ad_slots alone.
     if (String(event.data?.metadata?.type ?? '') === 'bid') {
       const metadata = event.data?.metadata ?? {}
-      const siteUrl = String(metadata.site_url ?? '')
+      // Normalised here as well as in the database: the bidder's URL, the
+      // stored URL and this one all reduce to the same bare domain.
+      const domain = normalizeDomain(metadata.site_url)
       const bidAmount = Number(metadata.bid_amount)
 
-      if (!siteUrl || !Number.isFinite(bidAmount) || bidAmount <= 0) {
+      if (!domain || !Number.isFinite(bidAmount) || bidAmount <= 0) {
         console.error('[dodo] bid event with unusable metadata:', JSON.stringify(metadata))
         return NextResponse.json({ received: true, boosted: false, reason: 'bad metadata' })
       }
 
       // Boosts are permanent: the bid holds its rank until someone outbids
-      // it, so nothing sets an expiry. Matched on the bare domain so the URL
-      // the bidder typed does not have to match the stored one exactly.
-      const { data: boostedId, error: boostError } = await supabase.rpc('apply_boost', {
-        site_url: siteUrl,
-        new_bid: bidAmount,
-      })
-
-      if (boostError) throw new Error(`boost: ${boostError.message}`)
+      // it, so nothing sets an expiry.
+      const boostedId = await applyBoost(supabase, domain, bidAmount)
 
       if (!boostedId) {
-        console.error('[dodo] paid bid for a site that is not listed:', siteUrl)
+        // Loud, because this is a payment that bought nothing. The bid amount
+        // and domain here are everything needed to apply it by hand.
+        console.error(
+          `[dodo] PAID BID NOT APPLIED — no listed site for "${domain}" at $${bidAmount} (${paymentRef})`,
+        )
         return NextResponse.json({ received: true, boosted: false, reason: 'site not found' })
       }
 
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
         .eq('site_id', boostedId)
         .eq('status', 'pending')
 
-      console.log(`[dodo] ${type} → boosted ${siteUrl} at $${bidAmount}`)
+      console.log(`[dodo] ${type} → boosted ${domain} at $${bidAmount}`)
       return NextResponse.json({ received: true, boosted: true, bid: bidAmount })
     }
 
@@ -175,6 +176,52 @@ export async function POST(request: Request) {
     // 500 so Dodo retries rather than dropping a paid event.
     return NextResponse.json({ error: 'Handler failed.' }, { status: 500 })
   }
+}
+
+type Admin = NonNullable<ReturnType<typeof getSupabaseAdmin>>
+
+/**
+ * Writes the winning bid onto the site, returning its id.
+ *
+ * The RPC matches on the normalised domain inside Postgres. The second pass
+ * exists for a deployment where migration 009 has not been run: without it the
+ * function does not exist, and a paid bid must not be dropped because of a
+ * missing migration. It narrows on the domain in SQL, then confirms the match
+ * in JavaScript so a substring like "outbid.lol" cannot boost
+ * "notoutbid.lol".
+ */
+async function applyBoost(
+  supabase: Admin,
+  domain: string,
+  bidAmount: number,
+): Promise<string | null> {
+  const { data, error } = await supabase.rpc('apply_boost', {
+    site_url: domain,
+    new_bid: bidAmount,
+  })
+
+  if (!error) return (data as string | null) ?? null
+  console.error('[dodo] apply_boost failed, falling back to a direct update:', error.message)
+
+  const { data: rows, error: lookupError } = await supabase
+    .from('sites')
+    .select('id,url')
+    .ilike('url', `%${domain}%`)
+    .limit(20)
+
+  if (lookupError) throw new Error(`boost lookup: ${lookupError.message}`)
+
+  const match = (rows ?? []).find((row) => normalizeDomain(row.url) === domain)
+  if (!match) return null
+
+  const { error: updateError } = await supabase
+    .from('sites')
+    .update({ bid_amount: bidAmount })
+    .eq('id', match.id)
+
+  if (updateError) throw new Error(`boost: ${updateError.message}`)
+
+  return match.id as string
 }
 
 function firstString(data: Record<string, unknown> | undefined, keys: string[]): string | null {

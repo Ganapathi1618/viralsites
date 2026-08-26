@@ -96,6 +96,12 @@ export default function BidModal({
             </>
           )}
 
+          {/* Said plainly, because the revenue figures elsewhere on the row
+              made people read the price of a bid as six figures. */}
+          <p className="mt-2 text-[11.5px] font-medium text-brand">
+            You pay your bid — {formatMoney(floor)} today, not this site&apos;s revenue.
+          </p>
+
           <p className="num mt-2 border-t border-line pt-2 text-[11px] text-muted">
             {site.name} · {site.clicks.toLocaleString('en-US')} clicks
           </p>

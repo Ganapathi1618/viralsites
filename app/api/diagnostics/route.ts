@@ -5,14 +5,13 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 /**
- * Probes the payment and analytics APIs and reports exactly what they answer.
+ * Probes the Dodo API and reports exactly what it answers.
  *
- * Both integrations were written against documentation that could not be
- * reached from the build environment, so the endpoint paths are informed
- * guesses. This tries every plausible one from the deployment — which *can*
- * reach them — and reports the status and a short body for each, so the
- * working shape can be identified in a single request instead of a guessing
- * loop.
+ * Dodo cannot be reached from the build environment, so this runs the same
+ * calls from the deployment — which can — and reports the status and a short
+ * body for each, so a failing checkout can be diagnosed in one request instead
+ * of a guessing loop. Analytics is not probed: Datafast is a client-side tag
+ * with no server call to check.
  *
  * Guarded by CRON_SECRET: it reveals which endpoints exist and the providers'
  * error text, which is not for the public. Secrets themselves are never
@@ -27,54 +26,65 @@ export async function GET(request: Request) {
   }
 
   const dodoKey = process.env.DODO_API_KEY?.trim()
-  const datafastKey = process.env.DATAFAST_API_KEY?.trim()
-  const websiteId =
-    process.env.NEXT_PUBLIC_DATAFAST_WEBSITE_ID?.trim() || 'dfid_vGpUzorjuNOwlhQikL4ui'
   const productId = process.env.DODO_BID_PRODUCT_ID?.trim()
+  const apiBase = (process.env.DODO_API_URL || 'https://live.dodopayments.com').replace(/\/$/, '')
 
   const env = {
     DODO_API_KEY: describe(dodoKey),
     DODO_BID_PRODUCT_ID: describe(productId),
     DODO_WEBHOOK_SECRET: describe(process.env.DODO_WEBHOOK_SECRET),
-    DATAFAST_API_KEY: describe(datafastKey),
-    NEXT_PUBLIC_DATAFAST_WEBSITE_ID: websiteId,
+    DODO_API_URL: apiBase,
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'MISSING',
     SUPABASE_SERVICE_ROLE_KEY: describe(process.env.SUPABASE_SERVICE_ROLE_KEY),
   }
 
-  const datafast = datafastKey
-    ? await probeAll(
-        [
-          `https://datafa.st/api/v1/websites/${websiteId}/live`,
-          `https://datafa.st/api/v1/websites/${websiteId}/stats`,
-          `https://datafa.st/api/v1/websites/${websiteId}`,
-          `https://datafa.st/api/v1/stats?website_id=${websiteId}`,
-          `https://datafa.st/api/v1/live?website_id=${websiteId}`,
-          `https://api.datafa.st/v1/websites/${websiteId}/stats`,
-          'https://datafa.st/api/v1/websites',
-        ],
-        { authorization: `Bearer ${datafastKey}`, accept: 'application/json' },
-      )
-    : 'DATAFAST_API_KEY not set'
-
   const dodo = dodoKey
     ? await probeAll(
-        [
-          'https://live.dodopayments.com/products',
-          'https://live.dodopayments.com/payments',
-          'https://api.dodopayments.com/products',
-          'https://test.dodopayments.com/products',
-        ],
+        [`${apiBase}/products`, productId ? `${apiBase}/products/${productId}` : `${apiBase}/payments`],
         { authorization: `Bearer ${dodoKey}`, accept: 'application/json' },
       )
     : 'DODO_API_KEY not set'
 
-  return NextResponse.json({ env, datafast, dodo }, { headers: { 'cache-control': 'no-store' } })
+  // The call the bid modal actually makes, priced at the $1 floor. It creates
+  // a real checkout session that nobody pays, which is the only way to see
+  // whether the live product accepts a per-bid amount override.
+  const checkoutSession =
+    dodoKey && productId
+      ? await probeCheckout(apiBase, dodoKey, productId)
+      : 'DODO_API_KEY or DODO_BID_PRODUCT_ID not set'
+
+  return NextResponse.json(
+    { env, dodo, checkoutSession },
+    { headers: { 'cache-control': 'no-store' } },
+  )
 }
 
 function describe(value: string | undefined) {
   if (!value) return 'MISSING'
   // Never echo a secret; length and prefix are enough to spot a paste error.
   return `set (${value.length} chars, starts "${value.slice(0, 4)}…")`
+}
+
+async function probeCheckout(apiBase: string, apiKey: string, productId: string) {
+  const body = {
+    product_cart: [{ product_id: productId, quantity: 1, amount: 100 }],
+    payment_link: true,
+    customer: { email: 'diagnostics@viralsites.fyi' },
+    metadata: { site_url: 'https://example.com', bid_amount: '1', type: 'bid' },
+    return_url: 'https://viralsites.fyi/?boosted=true',
+  }
+
+  try {
+    const response = await fetch(`${apiBase}/checkout/sessions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify(body),
+    })
+    return { status: response.status, body: (await response.text()).slice(0, 600) }
+  } catch (error) {
+    return { status: 0, body: `request failed: ${(error as Error).message}` }
+  }
 }
 
 async function probeAll(urls: string[], headers: Record<string, string>) {

@@ -97,3 +97,12 @@ export const LAUNCH_ENDS_AT = '2026-08-30T00:00:00'
 export const DODO_CHECKOUT_URL =
   process.env.NEXT_PUBLIC_DODO_CHECKOUT_URL || 'https://dodo.pe/ba68w4xy495'
 export const ONE_LINER_MAX = 60
+
+/**
+ * Datafast is the only analytics on the site. The tag is client-side and the
+ * dashboard lives on Datafast's own share page — there is no server-side read,
+ * because the share page renders its numbers in the browser and has no public
+ * API, so anything scraped from it would be a guess dressed up as a metric.
+ */
+export const DATAFAST_WEBSITE_ID = 'dfid_vGpUzorjuNOwlhQikL4ui'
+export const DATAFAST_SHARE_URL = 'https://datafa.st/share/6a8dcd957ec703b02ac6cb54'

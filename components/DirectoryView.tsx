@@ -36,6 +36,10 @@ export default function DirectoryView({
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
+  // The highest live bid anywhere on the board is what a new bid must beat,
+  // not just the bid on the row that was clicked.
+  const topBid = Math.max(0, ...sites.filter((site) => site.is_boosted).map((site) => site.bid_amount))
+
   /** Fetches the next page from Supabase by offset rather than slicing locally. */
   async function loadMore() {
     setLoading(true)
@@ -98,10 +102,11 @@ export default function DirectoryView({
       <SiteDrawer site={drawerSite} onClose={() => setDrawerSite(null)} />
 
       <BidModal
+        // Remounted per site and per price, so the amount box always opens at
+        // the current floor rather than whatever was typed last time.
+        key={`${bidSite?.id ?? 'none'}:${topBid}`}
         site={bidSite}
-        // The highest live bid anywhere on the board is what a new bid must
-        // beat, not just the bid on the row that was clicked.
-        topBid={Math.max(0, ...sites.filter((site) => site.is_boosted).map((site) => site.bid_amount))}
+        topBid={topBid}
         onClose={() => setBidSite(null)}
       />
     </>

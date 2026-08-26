@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { normalizeDomain } from '@/lib/domain'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { getSupabase } from '@/lib/supabase/client'
 import { siteUrl } from '@/lib/stripe'
@@ -7,17 +8,18 @@ import { MIN_BID_USD } from '@/lib/types'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+type SiteMatch = { id: string; url: string; bid_amount?: number | null }
+
 /**
- * Creates a Dodo checkout for the exact bid amount.
+ * Opens a Dodo checkout session priced at exactly the bid.
  *
- * The metadata is what makes the boost automatic: the webhook reads
- * `type: 'bid'` and `site_url` back and applies the boost to that site, rather
- * than guessing which pending row a payment belongs to.
+ * `amount` is what makes the bid dynamic: the product supplies the SKU, the
+ * cart line overrides its price in cents, so one product can charge $1 or
+ * $500 without a new product per amount.
  *
- * The request body follows Dodo's documented `POST /payments` shape. Their
- * full response is logged, and its status and body are carried back to the
- * browser in `detail`, because this is the one call whose exact answer matters
- * and it cannot be exercised from the build environment.
+ * The metadata is what makes the boost automatic — the webhook reads
+ * `type: 'bid'` and `site_url` back and applies the boost to that site,
+ * rather than guessing which pending row a payment belongs to.
  */
 export async function POST(request: Request) {
   let input: { site_url?: unknown; bid_amount?: unknown; bidder_email?: unknown }
@@ -30,14 +32,13 @@ export async function POST(request: Request) {
   const bidAmount = Number(input.bid_amount)
   const email = typeof input.bidder_email === 'string' ? input.bidder_email.trim() : ''
 
-  let url: string
-  try {
-    const parsed = new URL(String(input.site_url ?? ''))
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('scheme')
-    url = parsed.toString()
-  } catch {
-    return NextResponse.json({ error: 'Unknown site.' }, { status: 400 })
+  // Only the domain is ever matched on, so scheme, www and a trailing slash
+  // are all noise. Anything that leaves a domain behind is accepted.
+  const domain = normalizeDomain(input.site_url)
+  if (!domain || !domain.includes('.')) {
+    return NextResponse.json({ error: 'Enter the site you want to boost.' }, { status: 400 })
   }
+  const url = `https://${domain}`
 
   if (!Number.isFinite(bidAmount) || bidAmount < MIN_BID_USD) {
     return NextResponse.json({ error: `The minimum bid is $${MIN_BID_USD}.` }, { status: 400 })
@@ -48,54 +49,45 @@ export async function POST(request: Request) {
 
   const reader = getSupabaseAdmin() ?? getSupabase()
 
-  // The bid has to beat whatever boost is live, checked here and not only in
-  // the browser.
   if (reader) {
-    // Matched on the bare domain, so "outbid.lol", "https://outbid.lol" and
-    // "https://www.outbid.lol/" all find the same row.
-    const { data: matches, error: lookupError } = await reader.rpc('find_site_by_domain', {
-      site_url: url,
-    })
+    const site = await findSite(reader, domain)
 
-    const site = Array.isArray(matches) ? matches[0] : matches
-
-    // Only reject when the lookup succeeded and found nothing. A failed read —
-    // an outage, a network blip — must not block a paying bidder, since the
-    // webhook is the authority on what actually gets boosted.
-    if (lookupError) {
-      console.error('[bid/checkout] site lookup failed:', lookupError.message)
-    } else if (!site) {
-      return NextResponse.json({ error: 'That site is not listed.' }, { status: 404 })
-    }
-
-    const { data: top, error: topError } = await reader
-      .from('sites_ranked')
-      .select('effective_bid')
-      .order('effective_bid', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (topError) {
-      console.error('[bid/checkout] top-bid lookup failed:', topError.message)
-    } else {
-      const topBid = Number(top?.effective_bid ?? 0)
-      if (bidAmount <= topBid) {
-        return NextResponse.json(
-          { error: `Your bid must beat the current top bid of $${topBid}.` },
-          { status: 409 },
-        )
-      }
-    }
-
-    // Record the intent before sending anyone to a payment page, so an
-    // abandoned checkout still leaves a trace.
+    // A site we cannot find is never a reason to refuse money. The webhook
+    // matches on the domain again when the payment lands and is the authority
+    // on what actually gets boosted, so a lookup that comes up empty here —
+    // an unlisted site, a stale replica, an outage — costs the bidder nothing.
     if (site) {
+      // The bid has to beat whatever boost is live, checked here and not only
+      // in the browser.
+      const { data: top, error: topError } = await reader
+        .from('sites_ranked')
+        .select('effective_bid')
+        .order('effective_bid', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (topError) {
+        console.error('[bid/checkout] top-bid lookup failed:', topError.message)
+      } else {
+        const topBid = Number(top?.effective_bid ?? 0)
+        if (bidAmount <= topBid) {
+          return NextResponse.json(
+            { error: `Your bid must beat the current top bid of $${topBid}.` },
+            { status: 409 },
+          )
+        }
+      }
+
+      // Record the intent before sending anyone to a payment page, so an
+      // abandoned checkout still leaves a trace.
       const writer = getSupabaseAdmin() ?? reader
       const { error } = await writer
         .from('bids')
         .insert({ site_id: site.id, amount: bidAmount, email: email || null, status: 'pending' })
 
       if (error) console.error('[bid/checkout] could not record the bid:', error.message)
+    } else {
+      console.warn('[bid/checkout] no listed site matched', domain, '— continuing to checkout')
     }
   }
 
@@ -122,21 +114,28 @@ export async function POST(request: Request) {
   }
 
   const body = {
-    billing: { city: '', country: 'US', state: '', street: '', zipcode: '' },
-    customer: { email, name: '' },
+    product_cart: [
+      {
+        product_id: productId,
+        quantity: 1,
+        // Cents, so $12 is 1200. Rounded because a stray float would be
+        // rejected by the API.
+        amount: Math.round(bidAmount * 100),
+      },
+    ],
     payment_link: true,
-    product_cart: [{ product_id: productId, quantity: 1 }],
+    customer: { email },
     metadata: {
+      // Metadata values must be strings; the webhook parses these back.
       site_url: url,
-      // Metadata values must be strings; the webhook parses this back.
       bid_amount: String(bidAmount),
       type: 'bid',
     },
-    return_url: `${siteUrl()}?boosted=true`,
+    return_url: `${siteUrl()}/?boosted=true`,
   }
 
   try {
-    const response = await fetch(`${apiBase}/payments`, {
+    const response = await fetch(`${apiBase}/checkout/sessions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -147,8 +146,8 @@ export async function POST(request: Request) {
     })
 
     const raw = await response.text()
-    // Logged whole: this is the one call whose exact answer matters, and the
-    // shape has been guessed at more than once.
+    // Logged whole: this is the one call whose exact answer matters, and it
+    // cannot be exercised from anywhere but the deployment.
     console.log('[bid/checkout] dodo', response.status, raw.slice(0, 1000))
 
     let payload: Record<string, unknown> | null = null
@@ -173,7 +172,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: 'Could not open checkout for that amount.',
-          detail: `dodo 200 but no payment link: ${raw.slice(0, 300)}`,
+          detail: `dodo ${response.status} but no checkout link: ${raw.slice(0, 300)}`,
         },
         { status: 502 },
       )
@@ -192,13 +191,64 @@ export async function POST(request: Request) {
   }
 }
 
+/**
+ * Finds the listed site for a domain.
+ *
+ * The RPC does the matching in Postgres, which is the same comparison the
+ * webhook uses. The view query is a fallback for a deployment where migration
+ * 009 has not been run yet: without it the RPC does not exist, and a missing
+ * function must not look like a missing site.
+ */
+async function findSite(
+  client: NonNullable<ReturnType<typeof getSupabase>>,
+  domain: string,
+): Promise<SiteMatch | null> {
+  const { data, error } = await client.rpc('find_site_by_domain', { site_url: domain })
+
+  if (!error) {
+    const match = (Array.isArray(data) ? data[0] : data) as SiteMatch | null
+    if (match) return match
+  } else {
+    console.error('[bid/checkout] find_site_by_domain failed:', error.message)
+  }
+
+  const { data: rows, error: viewError } = await client
+    .from('sites_ranked')
+    .select('id,url,bid_amount,domain')
+    .eq('domain', domain)
+    .limit(1)
+
+  if (viewError) {
+    console.error('[bid/checkout] domain lookup failed:', viewError.message)
+    return null
+  }
+
+  return (rows?.[0] as SiteMatch | undefined) ?? null
+}
+
 /** Dodo has used several names for this field; accept whichever comes back. */
 function firstUrl(payload: Record<string, unknown> | null): string | null {
   if (!payload) return null
 
-  for (const key of ['payment_link', 'checkout_url', 'url', 'link', 'payment_url']) {
-    const value = payload[key]
-    if (typeof value === 'string' && /^https?:\/\//.test(value)) return value
+  const sources = [payload, payload.data as Record<string, unknown> | undefined].filter(
+    Boolean,
+  ) as Record<string, unknown>[]
+
+  const keys = [
+    'checkout_url',
+    'session_url',
+    'payment_link',
+    'url',
+    'link',
+    'payment_url',
+    'checkout_session_url',
+  ]
+
+  for (const source of sources) {
+    for (const key of keys) {
+      const value = source[key]
+      if (typeof value === 'string' && /^https?:\/\//.test(value)) return value
+    }
   }
 
   return null

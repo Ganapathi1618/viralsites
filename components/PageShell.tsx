@@ -15,7 +15,9 @@ import type { AdSlot, Stats } from '@/lib/types'
  * rails pinned to the viewport, and a single scrolling middle column.
  *
  * The rails never scroll — three compact cards plus the CTA fit inside the
- * viewport. Below lg they drop into the flow and the page scrolls normally.
+ * viewport. Below lg both rails are hidden outright and the same six slots
+ * appear once, as a 2x3 grid above the table, so a phone never renders the
+ * sponsors twice.
  */
 export default function PageShell({
   stats,
@@ -51,12 +53,14 @@ export default function PageShell({
     return () => window.removeEventListener('resize', sync)
   }, [])
 
-  // Dodo and Stripe both send buyers back with a ?checkout= flag.
-  const [checkoutState, setCheckoutState] = useState<string | null>(null)
+  // Sponsor checkouts come back with ?checkout=success|cancel; a paid bid
+  // comes back with ?boosted=true. Both are cleared from the URL once read,
+  // so a refresh does not re-announce a payment.
+  const [checkoutState, setCheckoutState] = useState<'success' | 'cancel' | 'boosted' | null>(null)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const state = params.get('checkout')
-    if (!state) return
+    const state = params.get('boosted') === 'true' ? 'boosted' : params.get('checkout')
+    if (state !== 'success' && state !== 'cancel' && state !== 'boosted') return
     setCheckoutState(state)
     window.history.replaceState({}, '', window.location.pathname)
   }, [])
@@ -70,14 +74,16 @@ export default function PageShell({
       {checkoutState ? (
         <div
           className={`fixed left-1/2 top-[calc(4rem+var(--banner-h,0px))] z-[80] -translate-x-1/2 animate-pop-in rounded-lg border px-4 py-2.5 text-[12.5px] shadow-sm ${
-            checkoutState === 'success'
-              ? 'border-money/25 bg-money/[0.08] text-money'
-              : 'border-line bg-page text-body'
+            checkoutState === 'cancel'
+              ? 'border-line bg-page text-body'
+              : 'border-money/25 bg-money/[0.08] text-money'
           }`}
         >
-          {checkoutState === 'success'
-            ? 'Payment received — your slot goes live once we add your copy. Check your email.'
-            : 'Checkout cancelled. Nothing was charged.'}
+          {checkoutState === 'boosted'
+            ? 'Bid received — your spot goes live the moment the payment confirms. Refresh in a few seconds.'
+            : checkoutState === 'success'
+              ? 'Payment received — your slot goes live once we add your copy. Check your email.'
+              : 'Checkout cancelled. Nothing was charged.'}
           <button
             type="button"
             onClick={() => setCheckoutState(null)}
@@ -97,12 +103,6 @@ export default function PageShell({
 
           <main className="scroll-area min-w-0 flex-1 py-5 lg:h-full lg:overflow-y-auto">
             {children}
-
-            {/* The rails are desktop-only above; below lg they stack here. */}
-            <div className="mt-6 grid gap-6 border-t border-line pt-6 sm:grid-cols-2 lg:hidden">
-              <LeftSidebar slots={leftSlots} />
-              <RightSidebar slots={rightSlots} onSubmit={() => setSubmitOpen(true)} />
-            </div>
 
             <Footer onSubmit={() => setSubmitOpen(true)} />
           </main>

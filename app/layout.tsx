@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
+import { DATAFAST_WEBSITE_ID } from '@/lib/types'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' })
@@ -59,9 +60,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${mono.variable}`}>
       <head>
+        {/* The only analytics on the site. */}
         <script
           defer
-          data-website-id="dfid_vGpUzorjuNOwlhQikL4ui"
+          data-website-id={DATAFAST_WEBSITE_ID}
           data-domain="viralsites.fyi"
           src="https://datafa.st/js/script.js"
         />

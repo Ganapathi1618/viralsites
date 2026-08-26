@@ -123,6 +123,9 @@ export default function SitesTable({
 
                 <p className="mt-0.5 line-clamp-1 text-[12px] text-body">{site.description}</p>
 
+                {/* Everything the site *is* stays on the left, in muted grey.
+                    Revenue lives here rather than beside the bid button,
+                    where a six-figure number read as the price of bidding. */}
                 <div className="num mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10.5px] text-muted">
                   <span className="truncate">{hostname(site.url)}</span>
                   <span>{formatAgo(site.created_at)}</span>
@@ -130,23 +133,23 @@ export default function SitesTable({
                     <span className="h-1.5 w-1.5 rounded-full bg-money" />
                     {site.clicks.toLocaleString('en-US')} clicks
                   </span>
+                  {site.revenue_amount > 0 ? (
+                    <span>rev: {formatMoney(site.revenue_amount)}</span>
+                  ) : null}
                 </div>
               </div>
 
+              {/* The only price on this side of the row is the price of the
+                  spot, so what the button costs is never in doubt. */}
               <div className="flex shrink-0 flex-col items-end gap-1">
-                <span
-                  className={`num text-[14px] font-bold ${site.is_boosted ? 'text-[#ea580c]' : 'text-money'}`}
-                >
-                  {site.is_boosted ? formatMoney(site.bid_amount) : formatMoney(site.revenue_amount)}
-                </span>
-                <span
-                  className={`num whitespace-nowrap rounded px-1.5 py-[3px] text-[10px] font-semibold ${
-                    site.is_boosted
-                      ? 'bg-brand/[0.1] text-brand'
-                      : 'border border-line text-muted group-hover:border-brand/40 group-hover:text-brand'
-                  }`}
-                >
-                  {site.is_boosted ? `claim #${rank}` : `bid ↑ ${formatMoney(nextBid)}`}
+                {site.is_boosted ? (
+                  <span className="num text-[10.5px] font-semibold text-[#ea580c]">
+                    holds at {formatMoney(site.bid_amount)}
+                  </span>
+                ) : null}
+
+                <span className="num inline-flex items-center rounded-md bg-brand px-2.5 py-1.5 text-[11.5px] font-semibold text-white transition group-hover:bg-brand-dark">
+                  bid ↑ {formatMoney(nextBid)}
                 </span>
               </div>
             </li>
