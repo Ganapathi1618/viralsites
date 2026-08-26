@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { candidateUrls, readTraffic } from '@/lib/datafast'
+import { readTraffic, statsUrls } from '@/lib/datafast'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -49,21 +49,21 @@ export async function GET(request: Request) {
     : 'DODO_API_KEY not set'
 
   // The call the bid modal actually makes, priced at the $1 floor. It creates
-  // a real checkout session that nobody pays, which is the only way to see
-  // whether the live product accepts a per-bid amount override.
-  const checkoutSession =
+  // a real payment link that nobody pays, which is the only way to see whether
+  // the live product accepts a per-bid amount override.
+  const payment =
     dodoKey && productId
-      ? await probeCheckout(apiBase, dodoKey, productId)
+      ? await probePayment(apiBase, dodoKey, productId)
       : 'DODO_API_KEY or DODO_BID_PRODUCT_ID not set'
 
-  // Every analytics path the header could read from, plus what the header
-  // actually resolves to right now. One request says whether a blank badge is
-  // a missing key, a wrong path, or a field name we did not expect.
-  const urls = candidateUrls()
+  // Both analytics calls raw, plus what the header actually resolves to right
+  // now. One request says whether a blank badge is a missing key, a rejected
+  // key, or a field name we did not expect.
+  const urls = statsUrls()
   const datafast = datafastKey
     ? {
         parsed: await readTraffic(datafastKey),
-        raw: await probeAll([...urls.overview, ...urls.realtime], {
+        raw: await probeAll([urls.realtime, urls.overview], {
           authorization: `Bearer ${datafastKey}`,
           accept: 'application/json',
         }),
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
     : 'DATAFAST_API_KEY not set'
 
   return NextResponse.json(
-    { env, datafast, dodo, checkoutSession },
+    { env, datafast, dodo, payment },
     { headers: { 'cache-control': 'no-store' } },
   )
 }
@@ -82,17 +82,18 @@ function describe(value: string | undefined) {
   return `set (${value.length} chars, starts "${value.slice(0, 4)}…")`
 }
 
-async function probeCheckout(apiBase: string, apiKey: string, productId: string) {
+async function probePayment(apiBase: string, apiKey: string, productId: string) {
   const body = {
+    billing: { city: 'NA', country: 'US', state: 'NA', street: 'NA', zipcode: '00000' },
+    customer: { email: 'diagnostics@viralsites.fyi', name: 'Bidder' },
     product_cart: [{ product_id: productId, quantity: 1, amount: 100 }],
     payment_link: true,
-    customer: { email: 'diagnostics@viralsites.fyi' },
     metadata: { site_url: 'https://example.com', bid_amount: '1', type: 'bid' },
     return_url: 'https://viralsites.fyi/?boosted=true',
   }
 
   try {
-    const response = await fetch(`${apiBase}/checkout/sessions`, {
+    const response = await fetch(`${apiBase}/payments`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(15_000),

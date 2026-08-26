@@ -3,13 +3,14 @@
  *
  *   npx tsx scripts/test-datafast.ts
  *
- * The exact field names Datafast returns could not be checked from the
- * environment this was written in, so the reader matches a set of plausible
- * names anywhere in the payload. That leniency is the risk: these pin the two
- * ways it could go wrong — reading a per-day figure as the window total, and
- * inventing a number where the payload has none.
+ * The two endpoints are confirmed; their field names are not, and datafa.st
+ * is unreachable from the environment this was written in. So the reader
+ * matches a set of plausible names anywhere in the payload. That leniency is
+ * the risk: these pin the two ways it could go wrong — reading a per-day
+ * figure as the window total, and inventing a number where the payload has
+ * none.
  */
-import { candidateUrls, pickNumber, reportingRange } from '../lib/datafast'
+import { pickNumber, reportingRange, statsUrls } from '../lib/datafast'
 
 let failures = 0
 
@@ -65,20 +66,22 @@ const range = reportingRange(new Date('2026-08-26T07:13:00Z'))
 check('ends today', range.endAt, '2026-08-26')
 check('starts thirty days back', range.startAt, '2026-07-27')
 
-console.log('every URL it will try')
-const urls = candidateUrls()
-check('overview candidates', urls.overview.length, 2)
-check('realtime candidates', urls.realtime.length, 3)
+console.log('the two URLs it calls')
+const urls = statsUrls(new Date('2026-08-26T07:13:00Z'))
 check(
-  'each carries the website id',
-  [...urls.overview, ...urls.realtime].every((url) => url.includes('websiteId=dfid_')),
-  true,
+  'realtime',
+  urls.realtime,
+  'https://datafa.st/api/v1/analytics/realtime?websiteId=dfid_vGpUzorjuNOwlhQikL4ui',
 )
 check(
-  'the overview candidates carry a date range',
-  urls.overview.every((url) => url.includes('startAt=') && url.includes('endAt=')),
-  true,
+  'overview, with a rolling 30-day window',
+  urls.overview,
+  'https://datafa.st/api/v1/analytics/overview?startAt=2026-07-27&endAt=2026-08-26&websiteId=dfid_vGpUzorjuNOwlhQikL4ui',
 )
+
+// A fixed range would keep reporting the same month forever.
+const later = statsUrls(new Date('2026-12-25T00:00:00Z'))
+check('the window moves with the calendar', later.overview.includes('endAt=2026-12-25'), true)
 
 console.log(failures === 0 ? '\nall Datafast checks passed' : `\n${failures} check(s) failed`)
 process.exit(failures === 0 ? 0 : 1)

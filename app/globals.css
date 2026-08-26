@@ -30,6 +30,17 @@ body {
   }
 }
 
+/* A strip that scrolls sideways on a phone should not carry a scrollbar into
+   the layout; the cut-off card at the edge is the affordance. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .scroll-area {
   scrollbar-width: thin;
   scrollbar-color: #dcdcdc transparent;
@@ -46,6 +57,20 @@ body {
   background: #cfcfcf;
 }
 
+/* Header height. Two rows on a phone, where the live stats sit under the logo
+   instead of beside it; one row from sm up. Everything fixed or full-height —
+   the content offset, both rails — is measured from this, so the layout can
+   never disagree with the header about where it ends. */
+:root {
+  --header-h: 5rem;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --header-h: 3.5rem;
+  }
+}
+
 /* Announcement ticker. The track holds two identical runs of the message list
    and slides by exactly half its width, so the loop has no visible seam. */
 @keyframes marquee {
@@ -60,6 +85,14 @@ body {
 .marquee {
   width: max-content;
   animation: marquee 45s linear infinite;
+}
+
+/* A phone shows a fraction of the track at once, so the same duration reads as
+   nearly motionless. */
+@media (max-width: 639px) {
+  .marquee {
+    animation-duration: 28s;
+  }
 }
 
 .marquee:hover {

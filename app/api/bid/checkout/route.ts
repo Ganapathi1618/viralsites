@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 type SiteMatch = { id: string; url: string; bid_amount?: number | null }
 
 /**
- * Opens a Dodo checkout session priced at exactly the bid.
+ * Opens a Dodo payment link priced at exactly the bid.
  *
  * `amount` is what makes the bid dynamic: the product supplies the SKU, the
  * cart line overrides its price in cents, so one product can charge $1 or
@@ -114,6 +114,9 @@ export async function POST(request: Request) {
   }
 
   const body = {
+    // Dodo requires a billing block even for a digital product nobody ships.
+    billing: { city: 'NA', country: 'US', state: 'NA', street: 'NA', zipcode: '00000' },
+    customer: { email, name: 'Bidder' },
     product_cart: [
       {
         product_id: productId,
@@ -124,7 +127,6 @@ export async function POST(request: Request) {
       },
     ],
     payment_link: true,
-    customer: { email },
     metadata: {
       // Metadata values must be strings; the webhook parses these back.
       site_url: url,
@@ -135,7 +137,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const response = await fetch(`${apiBase}/checkout/sessions`, {
+    const response = await fetch(`${apiBase}/payments`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -172,7 +174,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: 'Could not open checkout for that amount.',
-          detail: `dodo ${response.status} but no checkout link: ${raw.slice(0, 300)}`,
+          detail: `dodo ${response.status} but no payment link: ${raw.slice(0, 300)}`,
         },
         { status: 502 },
       )
@@ -234,15 +236,9 @@ function firstUrl(payload: Record<string, unknown> | null): string | null {
     Boolean,
   ) as Record<string, unknown>[]
 
-  const keys = [
-    'checkout_url',
-    'session_url',
-    'payment_link',
-    'url',
-    'link',
-    'payment_url',
-    'checkout_session_url',
-  ]
+  // payment_link first: that is what POST /payments returns. The rest cover
+  // the other names Dodo has used, so a rename is not an outage.
+  const keys = ['payment_link', 'checkout_url', 'payment_url', 'session_url', 'url', 'link']
 
   for (const source of sources) {
     for (const key of keys) {

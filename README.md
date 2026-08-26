@@ -336,21 +336,31 @@ renders its figures in the browser, so a server fetch got markup with no
 numbers in it and every badge silently vanished. The share page is a dashboard
 for humans; the API is the contract. It is still what "Full stats ↗" opens.
 
+Two calls, in parallel:
+
+```
+GET /api/v1/analytics/realtime?websiteId=…                       → live
+GET /api/v1/analytics/overview?startAt=…&endAt=…&websiteId=…     → visitors, pageviews
+```
+
+The overview window is a **rolling** 30 days. A fixed range would keep
+reporting the same month forever, so the header would quietly stop moving a few
+weeks after launch.
+
 ### Field names are matched, not assumed
 
-datafa.st is unreachable from the environment this was written in, so the exact
-response shape could not be confirmed. `lib/datafast.ts` tries a small set of
-documented paths in parallel, takes the first that answers, and searches the
-payload breadth-first for any of several plausible key names
+The endpoints are confirmed; their field names are not, and datafa.st is
+unreachable from the environment this was written in. `lib/datafast.ts`
+searches each payload breadth-first for any of several plausible key names
 (`visitors`, `uniqueVisitors`, `unique_visitors`, …). Breadth-first matters: a
 window total at the top level has to win over the same key inside a per-day
 breakdown, or the header would report one day as the month.
 
 `scripts/test-datafast.ts` pins both failure modes — reading a daily figure as
 the total, and inventing a number where the payload has none.
-`GET /api/diagnostics?key=$CRON_SECRET` returns the raw body of every candidate
-path plus what the header currently resolves to, so an unexpected shape is one
-request away from being fixed rather than a guessing loop.
+`GET /api/diagnostics?key=$CRON_SECRET` returns both raw bodies plus what the
+header currently resolves to, so an unexpected shape is one request away from
+being fixed rather than a guessing loop.
 
 Supabase does not track visitors at all — `active_visitors` and `page_views`
 are gone. `011_drop_visitor_tracking.sql` removes them from a database that
@@ -411,22 +421,23 @@ server-side as well as in the modal.
 
 ### The Dodo call
 
-`POST https://live.dodopayments.com/checkout/sessions`, bearer key, with:
+`POST https://live.dodopayments.com/payments`, bearer key, with:
 
 ```json
 {
+  "billing": { "city": "NA", "country": "US", "state": "NA", "street": "NA", "zipcode": "00000" },
+  "customer": { "email": "…", "name": "Bidder" },
   "product_cart": [{ "product_id": "…", "quantity": 1, "amount": 1200 }],
   "payment_link": true,
-  "customer": { "email": "…" },
   "metadata": { "site_url": "…", "bid_amount": "12", "type": "bid" },
   "return_url": "https://viralsites.fyi/?boosted=true"
 }
 ```
 
 `amount` is in cents and is what makes one product charge any bid: the SKU
-comes from `DODO_BID_PRODUCT_ID`, the price comes from the cart line. The
-response's checkout URL (`checkout.dodopayments.com/session/cks_…`) is returned
-as `url` and the browser is sent there.
+comes from `DODO_BID_PRODUCT_ID`, the price comes from the cart line. `billing`
+is required even though nothing ships. The response's `payment_link` is
+returned as `url` and the browser is sent there.
 
 **It never falls back to the fixed sponsor link.** That link charges the
 sponsor product's price, not the bid, so a missing `DODO_API_KEY` or

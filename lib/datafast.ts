@@ -1,12 +1,12 @@
 import { DATAFAST_WEBSITE_ID } from './types'
 
 export type TrafficStats = {
+  /** People on the site right now. */
+  live: number | null
   /** Unique visitors over the reporting window. */
   visitors: number | null
   /** Pageviews over the same window. */
   pageviews: number | null
-  /** People on the site right now. */
-  live: number | null
 }
 
 export type TrafficResult = TrafficStats & {
@@ -19,26 +19,11 @@ const API_BASE = (process.env.DATAFAST_API_URL || 'https://datafa.st/api/v1').re
 /**
  * Key names each figure might arrive under.
  *
- * Datafast's analytics endpoints are documented but could not be called from
- * the environment this was written in, so the exact field names are not
- * pinned. Matching a set of plausible names is not sloppiness — it is what
- * lets the first real response work rather than needing a second round trip
- * to discover a rename.
+ * The two endpoints are confirmed working; their exact field names are not,
+ * and datafa.st is unreachable from the environment this was written in.
+ * Matching a small set of plausible names is what lets the first real response
+ * work instead of needing another round trip to discover a casing difference.
  */
-const VISITOR_KEYS = [
-  'uniquevisitors',
-  'unique_visitors',
-  'totalvisitors',
-  'total_visitors',
-  'visitors',
-]
-const PAGEVIEW_KEYS = [
-  'totalpageviews',
-  'total_pageviews',
-  'pageviews',
-  'page_views',
-  'views',
-]
 const LIVE_KEYS = [
   'activevisitors',
   'active_visitors',
@@ -50,36 +35,29 @@ const LIVE_KEYS = [
   'visitors',
   'count',
 ]
-
-/** Candidate paths for each figure, tried together; the first that answers wins. */
-export const OVERVIEW_PATHS = ['/analytics/overview', '/analytics/pages']
-export const REALTIME_PATHS = ['/analytics/realtime', '/analytics/live', '/analytics/visitors/live']
+const VISITOR_KEYS = ['uniquevisitors', 'unique_visitors', 'totalvisitors', 'total_visitors', 'visitors']
+const PAGEVIEW_KEYS = ['totalpageviews', 'total_pageviews', 'pageviews', 'page_views', 'views']
 
 /**
  * The last 30 days, as plain dates.
  *
- * A window has to be chosen for the visitor and pageview totals; 30 days is
- * what a share page shows by default, so the header agrees with the dashboard
- * the "Full stats" link opens.
+ * Rolling rather than fixed: a hard-coded range would keep reporting the same
+ * month forever, so the header would quietly stop moving a few weeks from now.
  */
 export function reportingRange(now = new Date()): { startAt: string; endAt: string } {
-  const end = new Date(now)
-  const start = new Date(now.getTime() - 30 * 86_400_000)
-  return { startAt: iso(start), endAt: iso(end) }
+  return {
+    startAt: new Date(now.getTime() - 30 * 86_400_000).toISOString().slice(0, 10),
+    endAt: new Date(now).toISOString().slice(0, 10),
+  }
 }
 
-function iso(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
-/** Every URL this module will try, in the order it tries them. */
-export function candidateUrls(): { overview: string[]; realtime: string[] } {
-  const { startAt, endAt } = reportingRange()
-  const range = `startAt=${startAt}&endAt=${endAt}&websiteId=${DATAFAST_WEBSITE_ID}`
+/** The two endpoints the header reads, fully qualified. */
+export function statsUrls(now = new Date()): { realtime: string; overview: string } {
+  const { startAt, endAt } = reportingRange(now)
 
   return {
-    overview: OVERVIEW_PATHS.map((path) => `${API_BASE}${path}?${range}`),
-    realtime: REALTIME_PATHS.map((path) => `${API_BASE}${path}?websiteId=${DATAFAST_WEBSITE_ID}`),
+    realtime: `${API_BASE}/analytics/realtime?websiteId=${DATAFAST_WEBSITE_ID}`,
+    overview: `${API_BASE}/analytics/overview?startAt=${startAt}&endAt=${endAt}&websiteId=${DATAFAST_WEBSITE_ID}`,
   }
 }
 
@@ -119,72 +97,54 @@ export function pickNumber(payload: unknown, keys: string[]): number | null {
 
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string') {
+  if (typeof value === 'string' && value.trim() !== '') {
     const parsed = Number(value.replace(/,/g, ''))
-    if (Number.isFinite(parsed) && value.trim() !== '') return parsed
+    if (Number.isFinite(parsed)) return parsed
   }
   return null
 }
 
-/** Reads the figures the header shows. Anything unavailable comes back null. */
+/** Reads the header's figures. The two calls run in parallel. */
 export async function readTraffic(apiKey: string): Promise<TrafficResult> {
-  const urls = candidateUrls()
+  const urls = statsUrls()
 
-  const [overview, realtime] = await Promise.all([
-    firstAnswer(urls.overview, apiKey),
-    firstAnswer(urls.realtime, apiKey),
+  const [realtime, overview] = await Promise.all([
+    getJson(urls.realtime, apiKey),
+    getJson(urls.overview, apiKey),
   ])
 
   const stats: TrafficStats = {
-    visitors: overview.payload ? pickNumber(overview.payload, VISITOR_KEYS) : null,
-    pageviews: overview.payload ? pickNumber(overview.payload, PAGEVIEW_KEYS) : null,
-    live: realtime.payload ? pickNumber(realtime.payload, LIVE_KEYS) : null,
+    live: pickNumber(realtime.payload, LIVE_KEYS),
+    visitors: pickNumber(overview.payload, VISITOR_KEYS),
+    pageviews: pickNumber(overview.payload, PAGEVIEW_KEYS),
   }
 
-  if (stats.visitors === null && stats.pageviews === null && stats.live === null) {
-    return {
-      ...stats,
-      // Both failures, so one look says whether it is auth, a path, or a shape.
-      reason: `overview: ${overview.note} · realtime: ${realtime.note}`,
-    }
+  if (stats.live === null && stats.visitors === null && stats.pageviews === null) {
+    // Both notes, so one look says whether it is auth, a path, or a shape.
+    return { ...stats, reason: `realtime: ${realtime.note} · overview: ${overview.note}` }
   }
 
   return stats
 }
 
-/** Tries candidates in parallel and keeps the first that returns usable JSON. */
-async function firstAnswer(
-  urls: string[],
-  apiKey: string,
-): Promise<{ payload: unknown; note: string }> {
-  const attempts = await Promise.all(urls.map((url) => attempt(url, apiKey)))
-
-  const won = attempts.find((result) => result.payload !== null)
-  if (won) return won
-
-  return { payload: null, note: attempts.map((result) => result.note).join('; ') }
-}
-
-async function attempt(url: string, apiKey: string): Promise<{ payload: unknown; note: string }> {
-  const path = url.replace(API_BASE, '').split('?')[0]
-
+async function getJson(url: string, apiKey: string): Promise<{ payload: unknown; note: string }> {
   try {
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${apiKey}`, accept: 'application/json' },
       signal: AbortSignal.timeout(8_000),
+      // The route itself is dynamic; this is where the 30-second cache lives.
       next: { revalidate: 30 },
     })
 
     const raw = await response.text()
-
-    if (!response.ok) return { payload: null, note: `${path} → ${response.status}` }
+    if (!response.ok) return { payload: null, note: `${response.status} ${raw.slice(0, 120)}` }
 
     try {
-      return { payload: JSON.parse(raw), note: `${path} → ok` }
+      return { payload: JSON.parse(raw), note: 'ok' }
     } catch {
-      return { payload: null, note: `${path} → 200 but not JSON` }
+      return { payload: null, note: '200 but not JSON' }
     }
   } catch (error) {
-    return { payload: null, note: `${path} → ${(error as Error).message}` }
+    return { payload: null, note: (error as Error).message }
   }
 }

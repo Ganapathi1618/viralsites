@@ -73,7 +73,7 @@ export default function PageShell({
 
       {checkoutState ? (
         <div
-          className={`fixed left-1/2 top-[calc(4rem+var(--banner-h,0px))] z-[80] -translate-x-1/2 animate-pop-in rounded-lg border px-4 py-2.5 text-[12.5px] shadow-sm ${
+          className={`fixed left-1/2 top-[calc(var(--header-h)+var(--banner-h,0px)+0.5rem)] z-[80] -translate-x-1/2 animate-pop-in rounded-lg border px-4 py-2.5 text-[12.5px] shadow-sm ${
             checkoutState === 'cancel'
               ? 'border-line bg-page text-body'
               : 'border-money/25 bg-money/[0.08] text-money'
@@ -95,9 +95,9 @@ export default function PageShell({
         </div>
       ) : null}
 
-      <div className="mx-auto max-w-shell px-3 pt-[calc(3.5rem+var(--banner-h,0px))] sm:px-4 lg:h-screen">
+      <div className="mx-auto max-w-shell px-3 pt-[calc(var(--header-h)+var(--banner-h,0px))] sm:px-4 lg:h-screen">
         <div className="lg:flex lg:h-full lg:gap-6">
-          <aside className="hidden shrink-0 lg:block lg:h-[calc(100vh-3.5rem-var(--banner-h,0px))] lg:w-[200px] lg:overflow-hidden lg:py-4">
+          <aside className="hidden shrink-0 lg:block lg:h-[calc(100vh-var(--header-h)-var(--banner-h,0px))] lg:w-[200px] lg:overflow-hidden lg:py-4">
             <LeftSidebar slots={leftSlots} />
           </aside>
 
@@ -107,7 +107,7 @@ export default function PageShell({
             <Footer onSubmit={() => setSubmitOpen(true)} />
           </main>
 
-          <aside className="hidden shrink-0 lg:block lg:h-[calc(100vh-3.5rem-var(--banner-h,0px))] lg:w-[200px] lg:overflow-hidden lg:py-4">
+          <aside className="hidden shrink-0 lg:block lg:h-[calc(100vh-var(--header-h)-var(--banner-h,0px))] lg:w-[200px] lg:overflow-hidden lg:py-4">
             <RightSidebar slots={rightSlots} onSubmit={() => setSubmitOpen(true)} />
           </aside>
         </div>

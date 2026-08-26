@@ -123,9 +123,11 @@ export default function SitesTable({
 
                 <p className="mt-0.5 line-clamp-1 text-[12px] text-body">{site.description}</p>
 
-                {/* Everything the site *is* stays on the left, in muted grey.
-                    Revenue lives here rather than beside the bid button,
-                    where a six-figure number read as the price of bidding. */}
+                {/* Revenue is deliberately absent. A row that showed
+                    "$208,827" next to a "$1" button had people reading the
+                    six-figure number as the price of bidding; it now appears
+                    only in Top earners and the site drawer, where nothing is
+                    for sale. */}
                 <div className="num mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10.5px] text-muted">
                   <span className="truncate">{hostname(site.url)}</span>
                   <span>{formatAgo(site.created_at)}</span>
@@ -133,14 +135,11 @@ export default function SitesTable({
                     <span className="h-1.5 w-1.5 rounded-full bg-money" />
                     {site.clicks.toLocaleString('en-US')} clicks
                   </span>
-                  {site.revenue_amount > 0 ? (
-                    <span>rev: {formatMoney(site.revenue_amount)}</span>
-                  ) : null}
                 </div>
               </div>
 
-              {/* The only price on this side of the row is the price of the
-                  spot, so what the button costs is never in doubt. */}
+              {/* The only number on this side of the row is what the spot
+                  costs, so the button's price is never in doubt. */}
               <div className="flex shrink-0 flex-col items-end gap-1">
                 {site.is_boosted ? (
                   <span className="num text-[10.5px] font-semibold text-[#ea580c]">
