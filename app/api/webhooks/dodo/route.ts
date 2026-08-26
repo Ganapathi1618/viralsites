@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache'
 import { NextResponse } from 'next/server'
 import { normalizeDomain } from '@/lib/domain'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
@@ -107,6 +108,13 @@ export async function POST(request: Request) {
         .eq('site_id', boostedId)
         .eq('status', 'pending')
 
+      // The homepage is rendered once and reused for 60 seconds, so without
+      // this the site that just paid for #1 would keep its old rank for up to
+      // a minute — for the bidder, who is being redirected back right now,
+      // that reads as the payment not having worked. Purging here means the
+      // next request rebuilds against the new bid.
+      revalidatePath('/')
+
       console.log(`[dodo] ${type} → boosted ${domain} at $${bidAmount}`)
       return NextResponse.json({ received: true, boosted: true, bid: bidAmount })
     }
@@ -168,6 +176,8 @@ export async function POST(request: Request) {
       // bookkeeping, so log it rather than making Dodo retry a done deal.
       console.error('[dodo] slot filled but request status not updated:', approveError.message)
     }
+
+    revalidatePath('/')
 
     console.log(`[dodo] ${type} → slot ${slot.position} filled for ${pending.email}`)
     return NextResponse.json({ received: true, filled: true, position: slot.position })

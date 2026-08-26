@@ -4,7 +4,7 @@ import { normalizeDomain } from '@/lib/domain'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 import { getSupabase } from '@/lib/supabase/client'
 import { siteUrl } from '@/lib/stripe'
-import { MIN_BID_USD } from '@/lib/types'
+import { MIN_BID_USD, ONE_LINER_MAX } from '@/lib/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -23,7 +23,13 @@ type SiteMatch = { id: string; url: string; bid_amount?: number | null }
  * rather than guessing which pending row a payment belongs to.
  */
 export async function POST(request: Request) {
-  let input: { site_url?: unknown; bid_amount?: unknown; bidder_email?: unknown }
+  let input: {
+    site_url?: unknown
+    bid_amount?: unknown
+    bidder_email?: unknown
+    /** Supplied only by the "Add + Bid" flow, to list a site that is not here. */
+    create?: { name?: unknown; description?: unknown }
+  }
   try {
     input = (await request.json()) as typeof input
   } catch {
@@ -54,37 +60,95 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'That email does not look right.' }, { status: 400 })
   }
 
+  const createName =
+    typeof input.create?.name === 'string' ? input.create.name.trim().slice(0, 80) : ''
+  const createDescription =
+    typeof input.create?.description === 'string'
+      ? input.create.description.trim().slice(0, ONE_LINER_MAX)
+      : ''
+  const wantsCreate = Boolean(input.create)
+
+  if (wantsCreate && !createName) {
+    return NextResponse.json({ error: 'Give the site a name.' }, { status: 400 })
+  }
+
   const reader = getSupabaseAdmin() ?? getSupabase()
 
   if (reader) {
-    const site = await findSite(reader, domain)
+    // The board rule first, and independently of whether the site is listed:
+    // a bid that does not clear the top bid cannot rank, so charging for it
+    // would be selling nothing.
+    const { data: top, error: topError } = await reader
+      .from('sites_ranked')
+      .select('effective_bid')
+      .order('effective_bid', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-    // A site we cannot find is never a reason to refuse money. The webhook
-    // matches on the domain again when the payment lands and is the authority
-    // on what actually gets boosted, so a lookup that comes up empty here —
-    // an unlisted site, a stale replica, an outage — costs the bidder nothing.
-    if (site) {
-      // The bid has to beat whatever boost is live, checked here and not only
-      // in the browser.
-      const { data: top, error: topError } = await reader
-        .from('sites_ranked')
-        .select('effective_bid')
-        .order('effective_bid', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+    if (topError) {
+      console.error('[bid/checkout] top-bid lookup failed:', topError.message)
+    } else {
+      const topBid = Number(top?.effective_bid ?? 0)
+      if (bidAmount <= topBid) {
+        return NextResponse.json(
+          { error: `Your bid must beat the current top bid of $${topBid}.` },
+          { status: 409 },
+        )
+      }
+    }
 
-      if (topError) {
-        console.error('[bid/checkout] top-bid lookup failed:', topError.message)
-      } else {
-        const topBid = Number(top?.effective_bid ?? 0)
-        if (bidAmount <= topBid) {
-          return NextResponse.json(
-            { error: `Your bid must beat the current top bid of $${topBid}.` },
-            { status: 409 },
-          )
-        }
+    let site = await findSite(reader, domain)
+
+    // "Add + Bid": the site is not listed and the bidder gave us enough to
+    // list it. Insert it now, unboosted, so the row the webhook boosts already
+    // exists by the time the payment lands.
+    if (!site && wantsCreate) {
+      const admin = getSupabaseAdmin()
+
+      if (!admin) {
+        // Refusing is the honest failure. Taking the money and then having
+        // nothing to boost is not.
+        console.error('[bid/checkout] SUPABASE_SERVICE_ROLE_KEY missing — cannot list', domain)
+        return NextResponse.json(
+          { error: 'Adding a site is not wired up on this deployment yet.' },
+          { status: 503 },
+        )
       }
 
+      const { error: insertError } = await admin.from('sites').upsert(
+        {
+          name: createName,
+          url,
+          description: createDescription || `One-page site at ${domain}.`,
+          model_type: 'other',
+          revenue_amount: 0,
+          revenue_verified: false,
+          is_featured: false,
+        },
+        // A race with the scraper, or a double submit, must not overwrite
+        // whatever is already there.
+        { onConflict: 'url', ignoreDuplicates: true },
+      )
+
+      if (insertError) {
+        console.error('[bid/checkout] could not list', domain, insertError.message)
+        return NextResponse.json(
+          { error: 'Could not add that site.', detail: insertError.message },
+          { status: 502 },
+        )
+      }
+
+      // Read it back rather than trusting the upsert: with ignoreDuplicates a
+      // conflicting row returns nothing, and either way we need its id.
+      site = await findSite(admin, domain)
+      console.log('[bid/checkout] listed', domain, 'for an Add + Bid')
+    }
+
+    // A site we cannot find is still never a reason to refuse money. The
+    // webhook matches on the domain again when the payment lands and is the
+    // authority on what gets boosted, so an empty lookup here — a stale
+    // replica, an outage — costs the bidder nothing.
+    if (site) {
       // Record the intent before sending anyone to a payment page, so an
       // abandoned checkout still leaves a trace.
       const writer = getSupabaseAdmin() ?? reader

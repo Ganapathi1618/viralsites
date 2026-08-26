@@ -22,18 +22,28 @@ function trackClick(url: string) {
   }
 }
 
+/**
+ * The rank circle. The site holding #1 with a paid bid gets the flame and the
+ * boost colour, because that spot is the whole product — everything below it
+ * is just a queue for it.
+ */
 function RankBadge({ rank, boosted }: { rank: number; boosted: boolean }) {
-  const tone = boosted
-    ? 'bg-brand text-white'
-    : rank <= 3
-      ? 'bg-[#e9e9e9] text-body'
-      : 'bg-fill text-muted'
+  const champion = boosted && rank === 1
+
+  const tone = champion
+    ? 'bg-[#ea580c] text-white'
+    : boosted
+      ? 'bg-brand text-white'
+      : rank <= 3
+        ? 'bg-[#e9e9e9] text-body'
+        : 'bg-fill text-muted'
 
   return (
     <span
-      className={`num flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${tone}`}
+      className={`num flex h-6 shrink-0 items-center justify-center gap-0.5 rounded-full text-[11px] font-bold ${champion ? 'w-auto px-1.5' : 'w-6'} ${tone}`}
     >
-      {rank}
+      {champion ? <span aria-hidden>🔥</span> : null}
+      {champion ? `#${rank}` : rank}
     </span>
   )
 }
@@ -41,6 +51,7 @@ function RankBadge({ rank, boosted }: { rank: number; boosted: boolean }) {
 export default function SitesTable({
   sites,
   total,
+  topBid,
   loading,
   error,
   onLoadMore,
@@ -49,6 +60,8 @@ export default function SitesTable({
 }: {
   sites: Site[]
   total: number
+  /** Board-wide highest bid, from the server, so search cannot lower it. */
+  topBid: number
   loading: boolean
   error: string | null
   onLoadMore: () => void
@@ -56,8 +69,9 @@ export default function SitesTable({
   onBid: (site: Site) => void
 }) {
   // What the next bid costs anywhere on the board, so the price of the top
-  // spot is never a click away.
-  const topBid = Math.max(0, ...sites.map((site) => (site.is_boosted ? site.bid_amount : 0)))
+  // spot is never a click away. Taken from the server rather than the rows on
+  // screen: a search showing only unbid sites would otherwise quote $1 for a
+  // spot the server will not sell below the real top bid.
   const nextBid = Math.max(MIN_BID_USD, topBid + BID_INCREMENT_USD)
 
   if (sites.length === 0) {
@@ -138,8 +152,9 @@ export default function SitesTable({
                 </div>
               </div>
 
-              {/* The only number on this side of the row is what the spot
-                  costs, so the button's price is never in doubt. */}
+              {/* The only numbers on this side of the row are what the site
+                  holds and what it costs to take it, so the button's price is
+                  never confused with anything else. */}
               <div className="flex shrink-0 flex-col items-end gap-1">
                 {site.is_boosted ? (
                   <span className="num text-[10.5px] font-semibold text-[#ea580c]">
@@ -148,7 +163,12 @@ export default function SitesTable({
                 ) : null}
 
                 <span className="num inline-flex items-center rounded-md bg-brand px-2.5 py-1.5 text-[11.5px] font-semibold text-white transition group-hover:bg-brand-dark">
-                  bid ↑ {formatMoney(nextBid)}
+                  {/* Outbidding the leader is priced off that row's own bid;
+                      taking an unbid spot is priced off the board's top bid,
+                      since any boost has to clear it to rank at all. */}
+                  {site.is_boosted
+                    ? `outbid for ${formatMoney(site.bid_amount + BID_INCREMENT_USD)}`
+                    : `bid ↑ ${formatMoney(nextBid)}`}
                 </span>
               </div>
             </li>

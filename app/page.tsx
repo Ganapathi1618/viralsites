@@ -7,7 +7,7 @@ import { getDirectoryData } from '@/lib/data'
 export const revalidate = 60
 
 export default async function HomePage() {
-  const { sites, total, topEarners, leftSlots, rightSlots, stats, isLive, error } =
+  const { sites, total, topEarners, topBid, leftSlots, rightSlots, stats, isLive, error } =
     await getDirectoryData()
 
   return (
@@ -17,6 +17,7 @@ export default async function HomePage() {
         initialSites={sites}
         total={total}
         topEarners={topEarners}
+        topBid={topBid}
         stats={stats}
         isLive={isLive}
         error={error}

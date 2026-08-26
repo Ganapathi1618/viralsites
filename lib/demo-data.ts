@@ -39,9 +39,12 @@ export const DEMO_SITES: Site[] = SEEDS.map(
     is_featured,
     created_at: ago(index * 3 + 1),
     clicks: 0,
-    bid_amount: 0,
+    // One boosted row, so the fallback shows the mechanic the site is built
+    // around rather than a plain list. It is the third-biggest earner holding
+    // #1 on a $25 bid, which is exactly the point: rank is bought, not earned.
+    bid_amount: index === 2 ? 25 : 0,
     bid_expires_at: null,
-    is_boosted: false,
+    is_boosted: index === 2,
   }),
 )
 

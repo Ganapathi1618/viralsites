@@ -37,6 +37,26 @@ const RANKED = 'sites_ranked'
 
 
 
+/**
+ * The ranking rule, in TypeScript.
+ *
+ * `sites_ranked` applies this in SQL and is the authority; this exists so the
+ * demo fallback obeys the same rule instead of showing whatever order the
+ * seed array happens to be in. They must not drift — a fallback that ranks a
+ * boosted site third contradicts the one mechanic the site is built on.
+ */
+export function byRank(a: Site, b: Site): number {
+  const boostA = a.bid_amount > 0 ? 1 : 0
+  const boostB = b.bid_amount > 0 ? 1 : 0
+  if (boostA !== boostB) return boostB - boostA
+
+  const bidA = boostA ? a.bid_amount : 0
+  const bidB = boostB ? b.bid_amount : 0
+  if (bidA !== bidB) return bidB - bidA
+
+  return b.revenue_amount - a.revenue_amount
+}
+
 /** Just enough columns to total revenue and rank the leaderboard. */
 const SUMMARY_COLUMNS = 'id,name,url,revenue_amount,created_at'
 
@@ -46,6 +66,12 @@ export type DirectoryData = {
   /** Total rows in `sites`, so the table knows when to stop paging. */
   total: number
   topEarners: SiteSummary[]
+  /**
+   * The highest live bid anywhere in `sites`, not just on the rows on screen.
+   * Search filters the table, so a price derived from the visible rows would
+   * quote a bid the server then rejects for not clearing the board.
+   */
+  topBid: number
   leftSlots: AdSlot[]
   rightSlots: AdSlot[]
   stats: Stats
@@ -98,6 +124,7 @@ export async function getDirectoryData(): Promise<DirectoryData> {
       sites: [],
       total: 0,
       topEarners: [],
+      topBid: 0,
       ...splitRails(adSlots),
       stats: emptyStats(),
       isLive: true,
@@ -111,24 +138,41 @@ export async function getDirectoryData(): Promise<DirectoryData> {
 
   const summary = (summaryResult.data ?? []) as SiteSummary[]
 
+  const sites = (pageResult.data ?? []).map(normalizeSite)
+
   return {
-    sites: (pageResult.data ?? []).map(normalizeSite),
+    sites,
     total: pageResult.count ?? summary.length,
     topEarners: summary.slice(0, 5),
+    // The query is ordered by boost, so the highest bid is the first row —
+    // there is no second query to make.
+    topBid: sites[0]?.is_boosted ? sites[0].bid_amount : 0,
     ...splitRails(adSlots),
     stats: computeStats(summary, pageResult.count ?? summary.length),
     isLive: true,
   }
 }
 
-/** One page of the table, used by /api/sites for "Load more". */
-export async function getSitesPage(offset: number, limit = PAGE_SIZE) {
+/**
+ * One page of the table, used by /api/sites for "Load more" and for search.
+ *
+ * Search runs in Postgres rather than over the loaded rows: the table pages ten
+ * at a time, so filtering in the browser would only ever search the handful
+ * already on screen and would report "not found" for a site sitting on page
+ * three. Name and URL both match, since people type either.
+ */
+export async function getSitesPage(offset: number, limit = PAGE_SIZE, query = '') {
   const supabase = getSupabase()
+  const term = query.trim()
+
   if (!supabase) {
-    return { sites: DEMO_SITES.slice(offset, offset + limit), total: DEMO_SITES.length }
+    const matched = (term ? DEMO_SITES.filter((site) => matchesTerm(site, term)) : DEMO_SITES)
+      .slice()
+      .sort(byRank)
+    return { sites: matched.slice(offset, offset + limit), total: matched.length }
   }
 
-  const { data, error, count } = await supabase
+  let request = supabase
     .from(RANKED)
     .select(SITE_COLUMNS, { count: 'exact' })
     .order('boost_rank', { ascending: false })
@@ -136,13 +180,32 @@ export async function getSitesPage(offset: number, limit = PAGE_SIZE) {
     .order('revenue_amount', { ascending: false })
     .range(offset, offset + limit - 1)
 
+  if (term) {
+    // Escaped because `%` and `,` are both syntax inside a PostgREST `or`
+    // filter: an unescaped one would either match everything or split the
+    // expression into two malformed filters.
+    const safe = term.replace(/[%,()\\]/g, ' ').trim()
+    if (safe) request = request.or(`name.ilike.%${safe}%,url.ilike.%${safe}%`)
+  }
+
+  const { data, error, count } = await request
+
   if (error) throw new Error(error.message || 'Could not load more sites.')
 
   return { sites: (data ?? []).map(normalizeSite), total: count ?? 0 }
 }
 
+/** The demo-mode equivalent of the ilike filter above. */
+function matchesTerm(site: Site, term: string): boolean {
+  const needle = term.toLowerCase()
+  return (
+    site.name.toLowerCase().includes(needle) || site.url.toLowerCase().includes(needle)
+  )
+}
+
 function demoDirectory(): DirectoryData {
   const adSlots = rotateActiveSlots(DEMO_AD_SLOTS)
+  const ranked = DEMO_SITES.slice().sort(byRank)
   const summary: SiteSummary[] = DEMO_SITES.map((site) => ({
     id: site.id,
     name: site.name,
@@ -152,9 +215,10 @@ function demoDirectory(): DirectoryData {
   }))
 
   return {
-    sites: DEMO_SITES.slice(0, PAGE_SIZE),
-    total: DEMO_SITES.length,
+    sites: ranked.slice(0, PAGE_SIZE),
+    total: ranked.length,
     topEarners: summary.slice(0, 5),
+    topBid: ranked[0]?.is_boosted ? ranked[0].bid_amount : 0,
     ...splitRails(adSlots),
     stats: computeStats(summary, DEMO_SITES.length),
     isLive: false,

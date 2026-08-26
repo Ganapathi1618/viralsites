@@ -391,6 +391,41 @@ getting outbid drops the rank but keeps the boost. `bid_expires_at` remains on
 the table for the record but no longer affects ranking, so a paid boost never
 silently disappears.
 
+### Ranking, and how fast a paid bid shows
+
+Boosted rows sort above everything, highest bid first; the rest fall back to
+revenue. `sites_ranked` is the authority and every reader goes through it, so
+the order cannot differ between the homepage, "Load more" and search.
+
+This is proved rather than asserted. The rule was run against a real Postgres
+16 on a deliberately awkward board — the biggest earner unbid, the smallest
+earner holding the biggest bid, one bid long expired — and `byRank` in
+`lib/data.ts` is the TypeScript copy the demo fallback uses, pinned to that
+same fixture by `scripts/test-ranking.ts`. A $1 bid outranks a $500,000
+earner: rank is bought, not earned, and that is the product.
+
+**A paid boost appears immediately, not in 60 seconds.** The homepage is ISR
+with `revalidate = 60`, so on its own a site that just bought #1 would keep its
+old rank for up to a minute — right as the bidder is being redirected back,
+which reads as the payment having failed. The webhook calls `revalidatePath('/')`
+after applying the boost, and the bidder's return to `?boosted=true` triggers a
+`router.refresh()`, so the new order is there when they land.
+
+### Search
+
+Filtering runs in Postgres, over every row, through the same ranked view. The
+table pages ten at a time, so a browser-side filter would only search what is
+already on screen and would tell someone their site is missing when it is on
+page three. `%`, `,`, `(`, `)` and `\` are stripped from the term before it
+reaches the PostgREST `or` filter, where they are syntax.
+
+When nothing matches, the empty state offers **Add + Bid** rather than a dead
+end: that is the moment someone is most likely to pay, since they came looking
+for their own site. The route inserts the row unboosted, then opens checkout
+for the bid, so what the webhook boosts already exists when the payment lands.
+If the row cannot be created — no service-role key — it refuses rather than
+taking money for a boost with nothing to apply it to.
+
 ### Matching a site by domain
 
 Bidders type their site every way imaginable — `outbid.lol`,
