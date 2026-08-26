@@ -44,7 +44,13 @@ export async function POST(request: Request) {
   if (!Number.isFinite(bidAmount) || bidAmount < MIN_BID_USD) {
     return NextResponse.json({ error: `The minimum bid is $${MIN_BID_USD}.` }, { status: 400 })
   }
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  // Required, and checked here as well as in the modal: the receipt and every
+  // message about the boost go to this address, and a bid paid for with no way
+  // to contact the bidder is a support problem with no handle on it.
+  if (!email) {
+    return NextResponse.json({ error: 'An email is required.' }, { status: 400 })
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: 'That email does not look right.' }, { status: 400 })
   }
 
@@ -84,7 +90,7 @@ export async function POST(request: Request) {
       const writer = getSupabaseAdmin() ?? reader
       const { error } = await writer
         .from('bids')
-        .insert({ site_id: site.id, amount: bidAmount, email: email || null, status: 'pending' })
+        .insert({ site_id: site.id, amount: bidAmount, email, status: 'pending' })
 
       if (error) console.error('[bid/checkout] could not record the bid:', error.message)
     } else {

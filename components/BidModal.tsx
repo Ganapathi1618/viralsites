@@ -19,6 +19,7 @@ export default function BidModal({
   // bid yet.
   const floor = Math.max(MIN_BID_USD, topBid + BID_INCREMENT_USD)
   const [amount, setAmount] = useState(String(floor))
+  const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'saving' | 'redirecting'>('idle')
   const [error, setError] = useState<string | null>(null)
 
@@ -26,12 +27,13 @@ export default function BidModal({
 
   const value = Number(amount)
   const tooLow = !Number.isFinite(value) || value < floor
+  // Mirrors the check the route makes, so the button is not offered for a
+  // request the server will reject.
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!site || tooLow) return
-
-    const email = new FormData(event.currentTarget).get('email')
+    if (!site || tooLow || !emailValid) return
 
     setStatus('saving')
     setError(null)
@@ -43,7 +45,7 @@ export default function BidModal({
         body: JSON.stringify({
           site_url: site.url,
           bid_amount: value,
-          bidder_email: email,
+          bidder_email: email.trim(),
         }),
       })
       const payload = (await response.json()) as {
@@ -151,17 +153,20 @@ export default function BidModal({
 
         <div>
           <label className="field-label" htmlFor="bid-email">
-            Email
+            Email <span className="text-down">*</span>
           </label>
           <input
             id="bid-email"
             name="email"
             type="email"
+            required
             placeholder="you@example.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             className="field"
           />
           <p className="mt-1 text-[11px] text-muted">
-            For the receipt, and so we can reach you about the boost.
+            Required — the receipt goes here, and it is how we reach you about the boost.
           </p>
         </div>
 
@@ -171,7 +176,7 @@ export default function BidModal({
 
         <button
           type="submit"
-          disabled={tooLow || status !== 'idle'}
+          disabled={tooLow || !emailValid || status !== 'idle'}
           className="btn-primary w-full !py-3 !text-[14px]"
         >
           {status === 'saving'
